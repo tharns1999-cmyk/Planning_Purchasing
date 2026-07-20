@@ -7,6 +7,8 @@ import {
   PlanAllocation,
   ProductionActualEntry,
   BoardNote,
+  CustomerMaster,
+  ProductMaster,
 } from '../domain/types';
 
 export const LOCAL_STORAGE_DB_KEY = 'weekly-production-planner-db';
@@ -21,7 +23,10 @@ export interface DatabaseEntities {
   planAllocations: PlanAllocation[];
   productionActualEntries: ProductionActualEntry[];
   boardNotes: BoardNote[];
+  customers: CustomerMaster[];
+  products: ProductMaster[];
 }
+
 
 export interface DatabaseSchema {
   schemaVersion: number;

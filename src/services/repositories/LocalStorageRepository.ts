@@ -35,6 +35,16 @@ import {
   PlanningBoardDataDetail,
   ProductionActualWeekDataDetail,
   ProductionActualAllocationItemDetail,
+  CreateCustomerInput,
+  UpdateCustomerInput,
+  CreateCustomerResult,
+  UpdateCustomerResult,
+  SetCustomerActiveResult,
+  CreateProductInput,
+  UpdateProductInput,
+  CreateProductResult,
+  UpdateProductResult,
+  SetProductActiveResult,
 } from './PlannerRepository';
 import {
   DatabaseSchema,
@@ -42,7 +52,7 @@ import {
   LOCAL_STORAGE_DB_KEY,
   CURRENT_SCHEMA_VERSION,
 } from '../databaseSchema';
-import { INITIAL_SEED_DATABASE } from '../../data/seedData';
+import { INITIAL_SEED_DATABASE, SEED_CUSTOMERS, SEED_PRODUCTS } from '../../data/seedData';
 import {
   SalesOrder,
   SalesOrderLine,
@@ -56,7 +66,10 @@ import {
   ActualEntryType,
   Priority,
   BoardNote,
+  CustomerMaster,
+  ProductMaster,
 } from '../../domain/types';
+
 import {
   calculateActivePlannedQtyForLine,
   calculateRemainingQty,
@@ -130,8 +143,16 @@ export class LocalStorageRepository implements PlannerRepository {
       throw new Error('Database failed to initialize');
     }
     const parsed = JSON.parse(raw) as DatabaseSchema;
-    if (parsed.entities && !parsed.entities.boardNotes) {
-      parsed.entities.boardNotes = [];
+    if (parsed.entities) {
+      if (!parsed.entities.boardNotes) {
+        parsed.entities.boardNotes = [];
+      }
+      if (!parsed.entities.customers) {
+        parsed.entities.customers = structuredClone(SEED_CUSTOMERS);
+      }
+      if (!parsed.entities.products) {
+        parsed.entities.products = structuredClone(SEED_PRODUCTS);
+      }
     }
     return structuredClone(parsed);
   }
@@ -166,7 +187,10 @@ export class LocalStorageRepository implements PlannerRepository {
       'planAllocations',
       'productionActualEntries',
       'boardNotes',
+      'customers',
+      'products',
     ];
+
 
     const missingOrInvalidKeys = requiredKeys.filter(
       (key) => !Array.isArray(parsed.entities![key])
@@ -193,7 +217,10 @@ export class LocalStorageRepository implements PlannerRepository {
         planAllocations: parsed.entities.planAllocations!,
         productionActualEntries: parsed.entities.productionActualEntries!,
         boardNotes: parsed.entities.boardNotes!,
+        customers: parsed.entities.customers!,
+        products: parsed.entities.products!,
       },
+
     };
 
     try {
@@ -1580,4 +1607,201 @@ export class LocalStorageRepository implements PlannerRepository {
       allocations: allocationsDetail,
     };
   }
+
+  // --- CUSTOMER MASTER DATA METHODS ---
+  public listCustomers(includeInactive = false): CustomerMaster[] {
+    const snapshot = this.getSnapshot();
+    const list = snapshot.entities.customers || [];
+    if (includeInactive) return list;
+    return list.filter((c) => c.active);
+  }
+
+  public createCustomer(input: CreateCustomerInput): CreateCustomerResult {
+    const errors: string[] = [];
+    const code = (input.customerCode || '').trim();
+    const name = (input.customerName || '').trim();
+
+    if (!code) errors.push('customerCode is required');
+    if (!name) errors.push('customerName is required');
+
+    const snapshot = this.getSnapshot();
+    if (!snapshot.entities.customers) snapshot.entities.customers = [];
+
+    if (code && snapshot.entities.customers.some((c) => c.customerCode.toLowerCase() === code.toLowerCase())) {
+      errors.push(`รหัสลูกค้า '${code}' มีในระบบแล้ว`);
+    }
+
+    if (errors.length > 0) return { success: false, errors };
+
+    const now = this.clock.nowISO();
+    const newCustomer: CustomerMaster = {
+      customerId: this.idGenerator.generateId('cust'),
+      customerCode: code,
+      customerName: name,
+      active: true,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    snapshot.entities.customers.push(newCustomer);
+    snapshot.updatedAt = now;
+    localStorage.setItem(this.storageKey, JSON.stringify(snapshot));
+
+    return { success: true, customer: newCustomer };
+  }
+
+  public updateCustomer(customerId: string, input: UpdateCustomerInput): UpdateCustomerResult {
+    const snapshot = this.getSnapshot();
+    if (!snapshot.entities.customers) snapshot.entities.customers = [];
+
+    const cust = snapshot.entities.customers.find((c) => c.customerId === customerId);
+    if (!cust) return { success: false, errors: ['Customer not found'] };
+
+    const errors: string[] = [];
+    const newCode = input.customerCode !== undefined ? input.customerCode.trim() : cust.customerCode;
+    const newName = input.customerName !== undefined ? input.customerName.trim() : cust.customerName;
+
+    if (!newCode) errors.push('customerCode is required');
+    if (!newName) errors.push('customerName is required');
+
+    if (
+      newCode &&
+      snapshot.entities.customers.some(
+        (c) => c.customerId !== customerId && c.customerCode.toLowerCase() === newCode.toLowerCase()
+      )
+    ) {
+      errors.push(`รหัสลูกค้า '${newCode}' มีในระบบแล้ว`);
+    }
+
+    if (errors.length > 0) return { success: false, errors };
+
+    const now = this.clock.nowISO();
+    cust.customerCode = newCode;
+    cust.customerName = newName;
+    cust.updatedAt = now;
+
+    snapshot.updatedAt = now;
+    localStorage.setItem(this.storageKey, JSON.stringify(snapshot));
+
+    return { success: true, customer: cust };
+  }
+
+  public setCustomerActive(customerId: string, active: boolean): SetCustomerActiveResult {
+    const snapshot = this.getSnapshot();
+    if (!snapshot.entities.customers) snapshot.entities.customers = [];
+
+    const cust = snapshot.entities.customers.find((c) => c.customerId === customerId);
+    if (!cust) return { success: false, errors: ['Customer not found'] };
+
+    const now = this.clock.nowISO();
+    cust.active = active;
+    cust.updatedAt = now;
+
+    snapshot.updatedAt = now;
+    localStorage.setItem(this.storageKey, JSON.stringify(snapshot));
+
+    return { success: true, customer: cust };
+  }
+
+  // --- PRODUCT MASTER DATA METHODS ---
+  public listProducts(includeInactive = false): ProductMaster[] {
+    const snapshot = this.getSnapshot();
+    const list = snapshot.entities.products || [];
+    if (includeInactive) return list;
+    return list.filter((p) => p.active);
+  }
+
+  public createProduct(input: CreateProductInput): CreateProductResult {
+    const errors: string[] = [];
+    const code = (input.productCode || '').trim();
+    const name = (input.productName || '').trim();
+    const unit = (input.defaultUnit || '').trim();
+
+    if (!code) errors.push('productCode is required');
+    if (!name) errors.push('productName is required');
+    if (!unit) errors.push('defaultUnit is required');
+
+    const snapshot = this.getSnapshot();
+    if (!snapshot.entities.products) snapshot.entities.products = [];
+
+    if (code && snapshot.entities.products.some((p) => p.productCode.toLowerCase() === code.toLowerCase())) {
+      errors.push(`รหัสสินค้า '${code}' มีในระบบแล้ว`);
+    }
+
+    if (errors.length > 0) return { success: false, errors };
+
+    const now = this.clock.nowISO();
+    const newProduct: ProductMaster = {
+      productId: this.idGenerator.generateId('prod'),
+      productCode: code,
+      productName: name,
+      defaultUnit: unit,
+      active: true,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    snapshot.entities.products.push(newProduct);
+    snapshot.updatedAt = now;
+    localStorage.setItem(this.storageKey, JSON.stringify(snapshot));
+
+    return { success: true, product: newProduct };
+  }
+
+  public updateProduct(productId: string, input: UpdateProductInput): UpdateProductResult {
+    const snapshot = this.getSnapshot();
+    if (!snapshot.entities.products) snapshot.entities.products = [];
+
+    const prod = snapshot.entities.products.find((p) => p.productId === productId);
+    if (!prod) return { success: false, errors: ['Product not found'] };
+
+    const errors: string[] = [];
+    const newCode = input.productCode !== undefined ? input.productCode.trim() : prod.productCode;
+    const newName = input.productName !== undefined ? input.productName.trim() : prod.productName;
+    const newUnit = input.defaultUnit !== undefined ? input.defaultUnit.trim() : prod.defaultUnit;
+
+    if (!newCode) errors.push('productCode is required');
+    if (!newName) errors.push('productName is required');
+    if (!newUnit) errors.push('defaultUnit is required');
+
+    if (
+      newCode &&
+      snapshot.entities.products.some(
+        (p) => p.productId !== productId && p.productCode.toLowerCase() === newCode.toLowerCase()
+      )
+    ) {
+      errors.push(`รหัสสินค้า '${newCode}' มีในระบบแล้ว`);
+    }
+
+    if (errors.length > 0) return { success: false, errors };
+
+    const now = this.clock.nowISO();
+    prod.productCode = newCode;
+    prod.productName = newName;
+    prod.defaultUnit = newUnit;
+    prod.updatedAt = now;
+
+    snapshot.updatedAt = now;
+    localStorage.setItem(this.storageKey, JSON.stringify(snapshot));
+
+    return { success: true, product: prod };
+  }
+
+  public setProductActive(productId: string, active: boolean): SetProductActiveResult {
+    const snapshot = this.getSnapshot();
+    if (!snapshot.entities.products) snapshot.entities.products = [];
+
+    const prod = snapshot.entities.products.find((p) => p.productId === productId);
+    if (!prod) return { success: false, errors: ['Product not found'] };
+
+    const now = this.clock.nowISO();
+    prod.active = active;
+    prod.updatedAt = now;
+
+    snapshot.updatedAt = now;
+    localStorage.setItem(this.storageKey, JSON.stringify(snapshot));
+
+    return { success: true, product: prod };
+  }
 }
+

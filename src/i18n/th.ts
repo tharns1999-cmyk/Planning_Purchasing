@@ -11,7 +11,8 @@ export const THAI_TRANSLATIONS = {
     calendar: 'ปฏิทินส่งสินค้า',
     actuals: 'ผลการผลิตจริง',
     printPreview: 'ตัวอย่างก่อนพิมพ์',
-    masterData: 'จัดการข้อมูล',
+    masterData: 'ข้อมูลหลัก',
+
     settings: 'เครื่องมือข้อมูล',
     showcase: 'องค์ประกอบระบบ (Dev)',
   },

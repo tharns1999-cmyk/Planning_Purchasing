@@ -13,7 +13,68 @@ import {
   DueStatus,
   Room,
   BoardNote,
+  CustomerMaster,
+  ProductMaster,
 } from '../../domain/types';
+
+export interface CreateCustomerInput {
+  customerCode: string;
+  customerName: string;
+}
+
+export interface UpdateCustomerInput {
+  customerCode?: string;
+  customerName?: string;
+}
+
+export interface CreateCustomerResult {
+  success: boolean;
+  customer?: CustomerMaster;
+  errors?: string[];
+}
+
+export interface UpdateCustomerResult {
+  success: boolean;
+  customer?: CustomerMaster;
+  errors?: string[];
+}
+
+export interface SetCustomerActiveResult {
+  success: boolean;
+  customer?: CustomerMaster;
+  errors?: string[];
+}
+
+export interface CreateProductInput {
+  productCode: string;
+  productName: string;
+  defaultUnit: string;
+}
+
+export interface UpdateProductInput {
+  productCode?: string;
+  productName?: string;
+  defaultUnit?: string;
+}
+
+export interface CreateProductResult {
+  success: boolean;
+  product?: ProductMaster;
+  errors?: string[];
+}
+
+export interface UpdateProductResult {
+  success: boolean;
+  product?: ProductMaster;
+  errors?: string[];
+}
+
+export interface SetProductActiveResult {
+  success: boolean;
+  product?: ProductMaster;
+  errors?: string[];
+}
+
 
 export interface CreateSalesOrderHeaderInput {
   poNumber: string;
@@ -505,4 +566,21 @@ export interface PlannerRepository {
    * Validates and imports full JSON database schema.
    */
   importDatabase(data: unknown): { success: boolean; errors?: string[] };
+
+  /**
+   * Customer Master Data Methods
+   */
+  listCustomers(includeInactive?: boolean): CustomerMaster[];
+  createCustomer(input: CreateCustomerInput): CreateCustomerResult;
+  updateCustomer(customerId: string, input: UpdateCustomerInput): UpdateCustomerResult;
+  setCustomerActive(customerId: string, active: boolean): SetCustomerActiveResult;
+
+  /**
+   * Product Master Data Methods
+   */
+  listProducts(includeInactive?: boolean): ProductMaster[];
+  createProduct(input: CreateProductInput): CreateProductResult;
+  updateProduct(productId: string, input: UpdateProductInput): UpdateProductResult;
+  setProductActive(productId: string, active: boolean): SetProductActiveResult;
 }
+

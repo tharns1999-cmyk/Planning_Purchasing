@@ -31,7 +31,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse 
     { to: '/calendar', label: THAI_TRANSLATIONS.nav.calendar, icon: Truck },
     { to: '/actuals', label: THAI_TRANSLATIONS.nav.actuals, icon: CheckSquare },
     { to: '/print-preview', label: THAI_TRANSLATIONS.nav.printPreview, icon: Printer },
-    { to: '/master-data', label: THAI_TRANSLATIONS.nav.masterData, icon: Database },
+    { to: '/masters', label: THAI_TRANSLATIONS.nav.masterData, icon: Database },
+
     { to: '/settings', label: THAI_TRANSLATIONS.nav.settings, icon: Settings },
   ];
 

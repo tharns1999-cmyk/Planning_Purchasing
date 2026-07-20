@@ -113,6 +113,8 @@ export const SettingsPage: React.FC = () => {
           'planAllocations',
           'productionActualEntries',
           'boardNotes',
+          'customers',
+          'products',
         ];
 
         const missing = requiredKeys.filter((k) => !Array.isArray(parsed.entities[k]));
@@ -177,7 +179,10 @@ export const SettingsPage: React.FC = () => {
     { label: 'Plan Allocations', count: entities?.planAllocations?.length || 0, icon: LayoutList, color: 'text-blue-600 bg-blue-50' },
     { label: 'Actual Entries', count: entities?.productionActualEntries?.length || 0, icon: CheckSquare, color: 'text-rose-600 bg-rose-50' },
     { label: 'Board Notes', count: entities?.boardNotes?.length || 0, icon: StickyNote, color: 'text-teal-600 bg-teal-50' },
+    { label: 'ลูกค้า (Customers)', count: entities?.customers?.length || 0, icon: ShoppingBag, color: 'text-amber-600 bg-amber-50' },
+    { label: 'สินค้า (Products)', count: entities?.products?.length || 0, icon: Layers, color: 'text-cyan-600 bg-cyan-50' },
   ];
+
 
   return (
     <div className="space-y-6 max-w-6xl mx-auto pb-12">

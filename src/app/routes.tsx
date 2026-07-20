@@ -22,6 +22,8 @@ export const AppRoutes: React.FC = () => {
         <Route path="/actuals" element={<ActualsPage />} />
         <Route path="/print-preview" element={<PrintPreviewPage />} />
         <Route path="/master-data" element={<MasterDataPage />} />
+        <Route path="/masters" element={<MasterDataPage />} />
+
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/showcase" element={<ShowcasePage />} />
       </Routes>

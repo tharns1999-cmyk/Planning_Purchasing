@@ -1,5 +1,6 @@
 import { FIXED_ROOMS } from '../domain/constants';
-import { Priority, SourceType, SalesOrder, SalesOrderLine, WipPrepItem } from '../domain/types';
+import { Priority, SourceType, SalesOrder, SalesOrderLine, WipPrepItem, CustomerMaster, ProductMaster } from '../domain/types';
+
 import { DatabaseEntities, DatabaseSchema, CURRENT_SCHEMA_VERSION } from '../services/databaseSchema';
 
 const SEED_TIMESTAMP = '2026-07-20T00:00:00.000Z';
@@ -162,6 +163,142 @@ export const SEED_WIP_PREP_ITEMS: WipPrepItem[] = [
   },
 ];
 
+export const SEED_CUSTOMERS: CustomerMaster[] = [
+  {
+    customerId: 'cust-001',
+    customerCode: 'CUST-001',
+    customerName: 'บริษัท อิ่มอร่อย พลาซ่า จำกัด',
+    active: true,
+    createdAt: SEED_TIMESTAMP,
+    updatedAt: SEED_TIMESTAMP,
+  },
+  {
+    customerId: 'cust-002',
+    customerCode: 'CUST-002',
+    customerName: 'ห้างสรรพสินค้า เซ็นทรัลฟู้ดฮอลล์',
+    active: true,
+    createdAt: SEED_TIMESTAMP,
+    updatedAt: SEED_TIMESTAMP,
+  },
+  {
+    customerId: 'cust-003',
+    customerCode: 'CUST-003',
+    customerName: 'ร้านสะดวกซื้อ เฟรชไบท์',
+    active: true,
+    createdAt: SEED_TIMESTAMP,
+    updatedAt: SEED_TIMESTAMP,
+  },
+  {
+    customerId: 'cust-004',
+    customerCode: 'CUST-004',
+    customerName: 'บจก. สยามแม็คโคร ฟู้ดเซ็นเตอร์',
+    active: true,
+    createdAt: SEED_TIMESTAMP,
+    updatedAt: SEED_TIMESTAMP,
+  },
+  {
+    customerId: 'cust-005',
+    customerCode: 'CUST-005',
+    customerName: 'บมจ. บิ๊กซี ซูเปอร์เซ็นเตอร์',
+    active: true,
+    createdAt: SEED_TIMESTAMP,
+    updatedAt: SEED_TIMESTAMP,
+  },
+];
+
+export const SEED_PRODUCTS: ProductMaster[] = [
+  {
+    productId: 'prod-001',
+    productCode: 'PROD-BAK-001',
+    productName: 'พายไก่ไข่เค็ม 120g',
+    defaultUnit: 'ชิ้น',
+    active: true,
+    createdAt: SEED_TIMESTAMP,
+    updatedAt: SEED_TIMESTAMP,
+  },
+  {
+    productId: 'prod-002',
+    productCode: 'PROD-BAK-002',
+    productName: 'ขนมปังเนยสด 200g',
+    defaultUnit: 'ชิ้น',
+    active: true,
+    createdAt: SEED_TIMESTAMP,
+    updatedAt: SEED_TIMESTAMP,
+  },
+  {
+    productId: 'prod-003',
+    productCode: 'PROD-BAK-003',
+    productName: 'เค้กฝอยทอง 350g',
+    defaultUnit: 'กล่อง',
+    active: true,
+    createdAt: SEED_TIMESTAMP,
+    updatedAt: SEED_TIMESTAMP,
+  },
+  {
+    productId: 'prod-004',
+    productCode: 'PROD-FRT-001',
+    productName: 'มะม่วงอบแห้งพรีเมียม 150g',
+    defaultUnit: 'ถุง',
+    active: true,
+    createdAt: SEED_TIMESTAMP,
+    updatedAt: SEED_TIMESTAMP,
+  },
+  {
+    productId: 'prod-005',
+    productCode: 'PROD-FRT-002',
+    productName: 'สับปะรดอบแห้งแว่น 200g',
+    defaultUnit: 'ถุง',
+    active: true,
+    createdAt: SEED_TIMESTAMP,
+    updatedAt: SEED_TIMESTAMP,
+  },
+  {
+    productId: 'prod-006',
+    productCode: 'PROD-FRT-003',
+    productName: 'กล้วยหอมอบกรอบ 100g',
+    defaultUnit: 'ซอง',
+    active: true,
+    createdAt: SEED_TIMESTAMP,
+    updatedAt: SEED_TIMESTAMP,
+  },
+  {
+    productId: 'prod-007',
+    productCode: 'PROD-BAK-004',
+    productName: 'ขนมปังโฮลวีต 400g',
+    defaultUnit: 'แถว',
+    active: true,
+    createdAt: SEED_TIMESTAMP,
+    updatedAt: SEED_TIMESTAMP,
+  },
+  {
+    productId: 'prod-008',
+    productCode: 'PROD-CKI-001',
+    productName: 'คุกกี้เนยอัลมอนด์ 180g',
+    defaultUnit: 'กระปุก',
+    active: true,
+    createdAt: SEED_TIMESTAMP,
+    updatedAt: SEED_TIMESTAMP,
+  },
+  {
+    productId: 'prod-009',
+    productCode: 'PROD-TRT-001',
+    productName: 'ทาร์ตผลไม้สด 150g',
+    defaultUnit: 'ชิ้น',
+    active: true,
+    createdAt: SEED_TIMESTAMP,
+    updatedAt: SEED_TIMESTAMP,
+  },
+  {
+    productId: 'prod-010',
+    productCode: 'PROD-BRN-001',
+    productName: 'บราวนี่ช็อกโกแลตเข้มข้น 80g',
+    defaultUnit: 'ชิ้น',
+    active: true,
+    createdAt: SEED_TIMESTAMP,
+    updatedAt: SEED_TIMESTAMP,
+  },
+];
+
 export const INITIAL_SEED_ENTITIES: DatabaseEntities = {
   rooms: SEED_ROOMS,
   salesOrders: SEED_SALES_ORDERS,
@@ -171,6 +308,8 @@ export const INITIAL_SEED_ENTITIES: DatabaseEntities = {
   planAllocations: [],
   productionActualEntries: [],
   boardNotes: [],
+  customers: SEED_CUSTOMERS,
+  products: SEED_PRODUCTS,
 };
 
 export const INITIAL_SEED_DATABASE: DatabaseSchema = {
@@ -179,3 +318,4 @@ export const INITIAL_SEED_DATABASE: DatabaseSchema = {
   updatedAt: SEED_TIMESTAMP,
   entities: INITIAL_SEED_ENTITIES,
 };
+

@@ -33,13 +33,7 @@ const DEFAULT_LINE: UIProductLine = {
   dueDate: new Date().toISOString().slice(0, 10),
 };
 
-const SEED_CUSTOMER_NAMES = [
-  'บริษัท อิ่มอร่อย พลาซ่า จำกัด',
-  'ห้างสรรพสินค้า เซ็นทรัลฟู้ดฮอลล์',
-  'ร้านสะดวกซื้อ เฟรชไบท์',
-  'บริษัท สยามฟู้ดส์ จำกัด',
-  'บริษัท ไทยฟู้ดส์ จำกัด',
-];
+
 
 export const CreatePoModal: React.FC<CreatePoModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const reducedMotion = useReducedMotion() ?? false;
@@ -56,23 +50,32 @@ export const CreatePoModal: React.FC<CreatePoModalProps> = ({ isOpen, onClose, o
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
-  // Dynamic customer options derived from repository + defaults
-  const customerOptions = useMemo<SelectOption[]>(() => {
+  // Dynamic customer & product options derived from repository Master Data
+  const { customerOptions, productOptions, isMasterDataEmpty } = useMemo(() => {
     try {
       plannerRepository.initialize();
-      const existingOrders = plannerRepository.listSalesOrders();
-      const existingNames = existingOrders.map((o) => o.customerName).filter(Boolean);
+      const customers = plannerRepository.listCustomers(false);
+      const products = plannerRepository.listProducts(false);
 
-      const allUniqueNames = Array.from(new Set([...SEED_CUSTOMER_NAMES, ...existingNames]));
-      return [
+      const custOpts: SelectOption[] = [
         { value: '', label: 'เลือกลูกค้า' },
-        ...allUniqueNames.map((name) => ({ value: name, label: name })),
+        ...customers.map((c) => ({ value: c.customerName, label: `${c.customerCode} - ${c.customerName}` })),
       ];
+
+      const prodOpts: SelectOption[] = [
+        { value: '', label: 'เลือกสินค้าจากข้อมูลหลัก' },
+        ...products.map((p) => ({ value: p.productId, label: `${p.productCode} - ${p.productName}` })),
+      ];
+
+      const isEmpty = customers.length === 0 || products.length === 0;
+
+      return { customerOptions: custOpts, productOptions: prodOpts, isMasterDataEmpty: isEmpty };
     } catch {
-      return [
-        { value: '', label: 'เลือกลูกค้า' },
-        ...SEED_CUSTOMER_NAMES.map((name) => ({ value: name, label: name })),
-      ];
+      return {
+        customerOptions: [{ value: '', label: 'เลือกลูกค้า' }],
+        productOptions: [{ value: '', label: 'เลือกสินค้าจากข้อมูลหลัก' }],
+        isMasterDataEmpty: true,
+      };
     }
   }, []);
 
@@ -99,6 +102,26 @@ export const CreatePoModal: React.FC<CreatePoModalProps> = ({ isOpen, onClose, o
   const handleRemoveLine = (index: number) => {
     if (lines.length <= 1) return;
     setLines((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSelectProduct = (index: number, productId: string) => {
+    if (!productId) return;
+    try {
+      const products = plannerRepository.listProducts(true);
+      const found = products.find((p) => p.productId === productId);
+      if (found) {
+        setLines((prev) => {
+          const updated = [...prev];
+          const target = { ...updated[index]! };
+          target.productName = found.productName;
+          target.unit = found.defaultUnit;
+          updated[index] = target;
+          return updated;
+        });
+      }
+    } catch (err) {
+      console.error('Failed to select master product:', err);
+    }
   };
 
   const handleLineChange = (
@@ -166,7 +189,6 @@ export const CreatePoModal: React.FC<CreatePoModalProps> = ({ isOpen, onClose, o
 
     setIsSubmitting(true);
 
-    // Map UI lines to repository inputs (inherits PO header priority, empty productCode)
     const mappedLines: CreateSalesOrderLineInput[] = lines.map((l) => ({
       productCode: '',
       productName: l.productName,
@@ -220,6 +242,14 @@ export const CreatePoModal: React.FC<CreatePoModalProps> = ({ isOpen, onClose, o
       reducedMotion={reducedMotion}
     >
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Master Data Empty Warning Banner */}
+        {isMasterDataEmpty && (
+          <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-lg flex items-center gap-2 text-xs font-semibold">
+            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+            <span>ยังไม่มีข้อมูลหลัก กรุณาเพิ่มข้อมูลลูกค้าหรือสินค้าก่อน</span>
+          </div>
+        )}
+
         {/* Error Banner */}
         <AnimatePresence>
           {errorBanner && (
@@ -330,6 +360,13 @@ export const CreatePoModal: React.FC<CreatePoModalProps> = ({ isOpen, onClose, o
                     </button>
                   </div>
 
+                  <Select
+                    label="เลือกสินค้าจากข้อมูลหลัก"
+                    value=""
+                    onChange={(e) => handleSelectProduct(idx, e.target.value)}
+                    options={productOptions}
+                  />
+
                   <Input
                     label="ชื่อสินค้า *"
                     placeholder="เช่น พายไก่ไข่เค็ม 120g"
@@ -373,3 +410,4 @@ export const CreatePoModal: React.FC<CreatePoModalProps> = ({ isOpen, onClose, o
     </Modal>
   );
 };
+

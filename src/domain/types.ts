@@ -140,3 +140,24 @@ export interface ProductionActualEntry {
   recordedAt: string;
   recordedBy?: string;
 }
+
+export interface CustomerMaster {
+  customerId: string;
+  customerCode: string;
+  customerName: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProductMaster {
+  productId: string;
+  productCode: string;
+  productName: string;
+  defaultUnit: string;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+
