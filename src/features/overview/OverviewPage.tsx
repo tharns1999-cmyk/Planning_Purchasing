@@ -3,8 +3,6 @@ import { motion, useReducedMotion } from 'motion/react';
 import {
   FileText,
   AlertTriangle,
-  FileClock,
-  Activity,
   Flame,
   AlertOctagon,
   RefreshCw,
@@ -15,6 +13,7 @@ import {
   Building2,
   Calendar,
 } from 'lucide-react';
+
 import { Button } from '@/components/common/Button';
 import { Badge } from '@/components/common/Badge';
 import { LoadingState } from '@/components/common/LoadingState';
@@ -24,6 +23,8 @@ import { plannerRepository } from '@/services/plannerService';
 import { DashboardSummaryDetail } from '@/services/repositories/PlannerRepository';
 import { DueStatus } from '@/domain/types';
 import { pageTransitionVariants, getMotionVariants } from '@/motion/tokens';
+import { OverviewDrilldownModal, OverviewKpiType } from './OverviewDrilldownModal';
+import { buildOverviewReadModel, OverviewMetricsSummary } from '@/domain/readModels';
 
 export interface OverviewPageProps {
   referenceDate?: string;
@@ -32,16 +33,22 @@ export interface OverviewPageProps {
 export const OverviewPage: React.FC<OverviewPageProps> = ({ referenceDate }) => {
   const reducedMotion = useReducedMotion() ?? false;
   const [summary, setSummary] = useState<DashboardSummaryDetail | null>(null);
+  const [overviewModel, setOverviewModel] = useState<OverviewMetricsSummary | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [drilldownKpi, setDrilldownKpi] = useState<OverviewKpiType | null>(null);
+
 
   const loadDashboardData = useCallback(() => {
     setIsLoading(true);
     setError(null);
     try {
       plannerRepository.initialize();
-      const data = plannerRepository.getDashboardSummary(referenceDate);
-      setSummary(data);
+      const summaryData = plannerRepository.getDashboardSummary(referenceDate);
+      const snapshot = plannerRepository.getSnapshot();
+      const readModel = buildOverviewReadModel(snapshot, referenceDate);
+      setSummary(summaryData);
+      setOverviewModel(readModel);
     } catch (err) {
       console.error('Failed to load dashboard summary:', err);
       setError('ไม่สามารถโหลดข้อมูลภาพรวมระบบได้ กรุณาลองใหม่อีกครั้ง');
@@ -62,7 +69,7 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ referenceDate }) => 
     );
   }
 
-  if (error || !summary) {
+  if (error || !summary || !overviewModel) {
     return (
       <div className="p-6 md:p-8 max-w-7xl mx-auto">
         <ErrorState
@@ -112,7 +119,7 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ referenceDate }) => 
             ภาพรวมการผลิตรายสัปดาห์
           </h1>
           <p className="text-sm text-slate-500 mt-1 leading-normal">
-            สรุปสถานะใบสั่งซื้อ แผนการผลิตประจำสัปดาห์ และรายการแจ้งเตือนเร่งด่วน
+            สรุปสถานะใบสั่งซื้อ แผนการผลิตประจำสัปดาห์ และรายการแจ้งเตือนเร่งด่วน (กดที่ Card เพื่อดูรายละเอียด)
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -127,10 +134,13 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ referenceDate }) => 
         </div>
       </div>
 
-      {/* KPI Cards Grid (6 Metric Cards) */}
+      {/* KPI Cards Grid (6 Metric Cards - Clickable & 100% Single Source of Truth) */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
         {/* Card 1: Active POs */}
-        <div className="p-4 bg-white rounded-xl border border-slate-200/90 shadow-2xs flex flex-col justify-between transition-all hover:border-slate-300">
+        <div
+          onClick={() => setDrilldownKpi('ACTIVE_POS')}
+          className="p-4 bg-white rounded-xl border border-slate-200/90 shadow-2xs flex flex-col justify-between transition-all hover:border-sky-400 hover:shadow-md cursor-pointer active:scale-[0.99]"
+        >
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold text-slate-500 leading-normal">PO ที่ใช้งาน</span>
             <div className="w-8 h-8 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center">
@@ -138,13 +148,17 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ referenceDate }) => 
             </div>
           </div>
           <div>
-            <div className="text-2xl font-bold text-slate-900 tracking-tight">{summary.activePoCount}</div>
+            <div className="text-2xl font-bold text-slate-900 tracking-tight">{overviewModel.activePoCount}</div>
             <div className="text-xs text-slate-500 mt-0.5">ใบสั่งซื้อในระบบ</div>
+            <span className="text-[10px] text-sky-600 font-semibold block mt-1">กดเพื่อดูรายละเอียด →</span>
           </div>
         </div>
 
         {/* Card 2: Unplanned Lines */}
-        <div className="p-4 bg-white rounded-xl border border-slate-200/90 shadow-2xs flex flex-col justify-between transition-all hover:border-slate-300">
+        <div
+          onClick={() => setDrilldownKpi('UNPLANNED')}
+          className="p-4 bg-white rounded-xl border border-slate-200/90 shadow-2xs flex flex-col justify-between transition-all hover:border-amber-400 hover:shadow-md cursor-pointer active:scale-[0.99]"
+        >
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold text-slate-500 leading-normal">ยังไม่วางแผน</span>
             <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
@@ -152,41 +166,17 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ referenceDate }) => 
             </div>
           </div>
           <div>
-            <div className="text-2xl font-bold text-amber-600 tracking-tight">{summary.unplannedLineCount}</div>
+            <div className="text-2xl font-bold text-amber-600 tracking-tight">{overviewModel.unplannedLines.length}</div>
             <div className="text-xs text-slate-500 mt-0.5">รายการค้างจัดแผน</div>
+            <span className="text-[10px] text-amber-600 font-semibold block mt-1">กดเพื่อดูรายละเอียด →</span>
           </div>
         </div>
 
-        {/* Card 3: Draft Plans */}
-        <div className="p-4 bg-white rounded-xl border border-slate-200/90 shadow-2xs flex flex-col justify-between transition-all hover:border-slate-300">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-slate-500 leading-normal">แผนฉบับร่าง</span>
-            <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
-              <FileClock className="w-4 h-4" />
-            </div>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-indigo-600 tracking-tight">{summary.draftPlanCount}</div>
-            <div className="text-xs text-slate-500 mt-0.5">รออนุมัติ publish</div>
-          </div>
-        </div>
-
-        {/* Card 4: In Progress Production */}
-        <div className="p-4 bg-white rounded-xl border border-slate-200/90 shadow-2xs flex flex-col justify-between transition-all hover:border-slate-300">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-slate-500 leading-normal">กำลังผลิต</span>
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <Activity className="w-4 h-4" />
-            </div>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-emerald-600 tracking-tight">{summary.inProgressActualCount}</div>
-            <div className="text-xs text-slate-500 mt-0.5">รายการเริ่มบันทึกแล้ว</div>
-          </div>
-        </div>
-
-        {/* Card 5: Urgent Orders */}
-        <div className="p-4 bg-white rounded-xl border border-slate-200/90 shadow-2xs flex flex-col justify-between transition-all hover:border-slate-300">
+        {/* Card 3: Urgent Orders */}
+        <div
+          onClick={() => setDrilldownKpi('URGENT')}
+          className="p-4 bg-white rounded-xl border border-slate-200/90 shadow-2xs flex flex-col justify-between transition-all hover:border-rose-400 hover:shadow-md cursor-pointer active:scale-[0.99]"
+        >
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold text-slate-500 leading-normal">PO เร่งด่วน</span>
             <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
@@ -194,13 +184,53 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ referenceDate }) => 
             </div>
           </div>
           <div>
-            <div className="text-2xl font-bold text-rose-600 tracking-tight">{summary.urgentLineCount}</div>
+            <div className="text-2xl font-bold text-rose-600 tracking-tight">{overviewModel.urgentLines.length}</div>
             <div className="text-xs text-slate-500 mt-0.5">รายการต้องเร่งวางแผน</div>
+            <span className="text-[10px] text-rose-600 font-semibold block mt-1">กดเพื่อดูรายละเอียด →</span>
+          </div>
+        </div>
+
+        {/* Card 4: Due Soon Items */}
+        <div
+          onClick={() => setDrilldownKpi('DUE_SOON')}
+          className="p-4 bg-white rounded-xl border border-slate-200/90 shadow-2xs flex flex-col justify-between transition-all hover:border-amber-400 hover:shadow-md cursor-pointer active:scale-[0.99]"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-slate-500 leading-normal">ใกล้กำหนดส่ง</span>
+            <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+              <Clock className="w-4 h-4" />
+            </div>
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-amber-600 tracking-tight">{overviewModel.dueSoonLines.length}</div>
+            <div className="text-xs text-slate-500 mt-0.5">ส่งภายใน 3 วัน</div>
+            <span className="text-[10px] text-amber-600 font-semibold block mt-1">กดเพื่อดูรายละเอียด →</span>
+          </div>
+        </div>
+
+        {/* Card 5: Overdue Items */}
+        <div
+          onClick={() => setDrilldownKpi('OVERDUE')}
+          className="p-4 bg-white rounded-xl border border-slate-200/90 shadow-2xs flex flex-col justify-between transition-all hover:border-rose-400 hover:shadow-md cursor-pointer active:scale-[0.99]"
+        >
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-slate-500 leading-normal">เกินกำหนดส่ง</span>
+            <div className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
+              <AlertTriangle className="w-4 h-4" />
+            </div>
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-rose-600 tracking-tight">{overviewModel.overdueLines.length}</div>
+            <div className="text-xs text-slate-500 mt-0.5">เกินกำหนดส่งแล้ว</div>
+            <span className="text-[10px] text-rose-600 font-semibold block mt-1">กดเพื่อดูรายละเอียด →</span>
           </div>
         </div>
 
         {/* Card 6: Shortfall Items */}
-        <div className="p-4 bg-white rounded-xl border border-slate-200/90 shadow-2xs flex flex-col justify-between transition-all hover:border-slate-300">
+        <div
+          onClick={() => setDrilldownKpi('SHORTFALL')}
+          className="p-4 bg-white rounded-xl border border-slate-200/90 shadow-2xs flex flex-col justify-between transition-all hover:border-purple-400 hover:shadow-md cursor-pointer active:scale-[0.99]"
+        >
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-semibold text-slate-500 leading-normal">ผลิตไม่ครบ</span>
             <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
@@ -208,11 +238,14 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ referenceDate }) => 
             </div>
           </div>
           <div>
-            <div className="text-2xl font-bold text-purple-600 tracking-tight">{summary.shortfallCount}</div>
+            <div className="text-2xl font-bold text-purple-600 tracking-tight">{overviewModel.shortfallRows.length}</div>
             <div className="text-xs text-slate-500 mt-0.5">ปิดงานแบบขาดเหลือ</div>
+            <span className="text-[10px] text-purple-600 font-semibold block mt-1">กดเพื่อดูรายละเอียด →</span>
           </div>
         </div>
       </div>
+
+
 
       {/* Main Grid Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -433,6 +466,17 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ referenceDate }) => 
           </div>
         </div>
       </div>
+
+
+
+      {/* KPI Drilldown Modal */}
+      <OverviewDrilldownModal
+        isOpen={Boolean(drilldownKpi)}
+        onClose={() => setDrilldownKpi(null)}
+        kpiType={drilldownKpi}
+        referenceDate={referenceDate}
+      />
     </motion.div>
   );
 };
+

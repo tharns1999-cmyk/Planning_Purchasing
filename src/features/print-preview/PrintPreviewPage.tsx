@@ -6,7 +6,6 @@ import {
   ChevronRight,
   Calendar,
   ArrowLeft,
-  FileText,
   Info,
 } from 'lucide-react';
 import { toPng } from 'html-to-image';
@@ -97,23 +96,24 @@ export const PrintPreviewPage: React.FC = () => {
     try {
       const snap = plannerRepository.getSnapshot();
       let displayName = 'N/A';
-      let poNumber = '';
+      let customerName = '';
 
       if (alloc.sourceType === SourceType.FG && alloc.salesOrderLineId) {
         const line = snap.entities.salesOrderLines.find((l) => l.id === alloc.salesOrderLineId);
-        const order = snap.entities.salesOrders.find((o) => o.id === alloc.salesOrderId);
+        const order = snap.entities.salesOrders.find((o) => o.id === (line ? line.orderId : alloc.salesOrderId));
         if (line) displayName = line.skuName;
-        if (order) poNumber = order.orderNo;
+        if (order) customerName = order.customerName;
       } else if (alloc.wipPrepItemId) {
         const item = snap.entities.wipPrepItems.find((i) => i.itemId === alloc.wipPrepItemId);
         if (item) displayName = item.itemName;
       }
 
-      return { displayName, poNumber };
+      return { displayName, customerName };
     } catch {
-      return { displayName: 'รายการผลิต', poNumber: '' };
+      return { displayName: 'รายการผลิต', customerName: '' };
     }
   };
+
 
   // Week Navigation Handlers
   const handlePreviousWeek = () => {
@@ -405,6 +405,7 @@ export const PrintPreviewPage: React.FC = () => {
                         );
 
                         return (
+
                           <td key={room.id} className="py-2 px-2 border-r border-slate-300 last:border-r-0 min-w-[130px]">
                             <div className="space-y-2">
                               {/* Board Notes */}
@@ -424,7 +425,7 @@ export const PrintPreviewPage: React.FC = () => {
 
                               {/* Allocations */}
                               {cellAllocations.map((alloc) => {
-                                const { displayName, poNumber } = getSnapshotDetails(alloc);
+                                const { displayName, customerName } = getSnapshotDetails(alloc);
                                 const isFg = alloc.sourceType === SourceType.FG;
 
                                 // Lookup actual metrics if mode is PLAN_AND_ACTUAL
@@ -434,50 +435,48 @@ export const PrintPreviewPage: React.FC = () => {
                                 }
 
                                 const printNoteText = alloc.printNote || alloc.note;
+                                const displayCustomer = alloc.printCustomerTag || customerName;
 
                                 return (
                                   <div
                                     key={alloc.allocationId}
-                                    className={`p-2 rounded text-left border space-y-1 text-[11px] ${
+                                    className={`p-2 rounded text-left border space-y-1 ${
                                       alloc.highlightOnPlan ? 'bg-amber-100/90 border-amber-300 highlight-on-plan' : 'bg-white border-slate-300'
                                     }`}
                                   >
-                                    <div className="font-bold text-slate-900 leading-tight">
+                                    {/* Line 1: Product Name */}
+                                    <div className="font-extrabold text-slate-900 text-xs sm:text-sm leading-tight break-words">
                                       {displayName}
                                     </div>
 
-                                    {isFg ? (
-                                      <>
-                                        {poNumber && (
-                                          <div className="text-[10px] text-slate-500 flex items-center gap-0.5">
-                                            <FileText className="w-3 h-3 text-slate-400" />
-                                            <span>PO: {poNumber}</span>
-                                          </div>
-                                        )}
-                                        {alloc.printCustomerTag && (
-                                          <div className="text-[10px] text-sky-800 font-semibold bg-sky-50 px-1 py-0.2 rounded border border-sky-200 inline-block">
-                                            ลูกค้า: {alloc.printCustomerTag}
-                                          </div>
-                                        )}
-                                        <div className="text-slate-700 font-medium">
-                                          ผลิต: <strong>{alloc.plannedQty} {alloc.plannedUnit || alloc.unit}</strong>
-                                        </div>
-                                        <div className="text-emerald-700 font-bold">
-                                          ได้ FG: <strong>{alloc.fgOutputQty ?? alloc.plannedQty} {alloc.fgOutputUnit || alloc.unit}</strong>
-                                        </div>
-                                      </>
-                                    ) : (
-                                      <>
-                                        {alloc.printCustomerTag && (
-                                          <div className="text-[10px] text-sky-800 font-semibold bg-sky-50 px-1 py-0.2 rounded border border-sky-200 inline-block">
-                                            ลูกค้า: {alloc.printCustomerTag}
-                                          </div>
-                                        )}
-                                        <div className="text-slate-700 font-medium">
-                                          วางแผน: <strong>{alloc.plannedQty} {alloc.plannedUnit || alloc.unit}</strong>
-                                        </div>
-                                      </>
+                                    {/* Line 2: Customer Name / Tag */}
+                                    {displayCustomer && (
+                                      <div className="text-[10px] sm:text-[11px] font-bold text-sky-800 bg-sky-50/90 px-1.5 py-0.5 rounded border border-sky-200 inline-block max-w-full truncate">
+                                        ลูกค้า: {displayCustomer}
+                                      </div>
                                     )}
+
+                                    {/* Line 3 & 4: Production Qty (Highlight Box) & Expected FG (De-emphasized) */}
+                                    {isFg ? (
+                                      <div className="space-y-1 my-1">
+                                        <div className="bg-slate-50 border border-slate-300/90 px-2 py-1 rounded flex items-center justify-between text-xs sm:text-sm font-black text-slate-900 shadow-2xs">
+                                          <span className="text-slate-700 font-bold text-[11px] sm:text-xs">ผลิต:</span>
+                                          <span className="text-slate-950 font-black text-xs sm:text-sm">{alloc.plannedQty} {alloc.plannedUnit || alloc.unit}</span>
+                                        </div>
+                                        <div className="text-[10px] text-slate-500 font-normal px-0.5">
+                                          ได้ FG: {alloc.fgOutputQty ?? alloc.plannedQty} {alloc.fgOutputUnit || alloc.unit}
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="my-1">
+                                        <div className="bg-slate-50 border border-slate-300/90 px-2 py-1 rounded flex items-center justify-between text-xs sm:text-sm font-black text-slate-900 shadow-2xs">
+                                          <span className="text-slate-700 font-bold text-[11px] sm:text-xs">วางแผน:</span>
+                                          <span className="text-slate-950 font-black text-xs sm:text-sm">{alloc.plannedQty} {alloc.plannedUnit || alloc.unit}</span>
+                                        </div>
+                                      </div>
+                                    )}
+
+
 
                                     {printNoteText && (
                                       <div className="text-[10px] text-slate-600 italic">

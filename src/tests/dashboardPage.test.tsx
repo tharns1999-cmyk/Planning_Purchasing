@@ -15,10 +15,11 @@ describe('Phase 2A — Dashboard Page UI Tests', () => {
     expect(screen.getByText('ภาพรวมการผลิตรายสัปดาห์')).toBeInTheDocument();
     expect(screen.getByText('PO ที่ใช้งาน')).toBeInTheDocument();
     expect(screen.getAllByText('ยังไม่วางแผน').length).toBeGreaterThan(0);
-    expect(screen.getByText('แผนฉบับร่าง')).toBeInTheDocument();
-    expect(screen.getByText('กำลังผลิต')).toBeInTheDocument();
     expect(screen.getByText('PO เร่งด่วน')).toBeInTheDocument();
+    expect(screen.getByText('ใกล้กำหนดส่ง')).toBeInTheDocument();
+    expect(screen.getByText('เกินกำหนดส่ง')).toBeInTheDocument();
     expect(screen.getByText('ผลิตไม่ครบ')).toBeInTheDocument();
+
   });
 
   it('2. Renders Sales Order breakdown and Urgent FG section', () => {

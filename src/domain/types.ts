@@ -59,10 +59,12 @@ export interface SalesOrder {
   orderNo: string;
   customerName: string;
   orderDate: string;
+  note?: string;
   lines: SalesOrderLine[];
   createdAt: string;
   updatedAt: string;
 }
+
 
 export interface WipPrepItem {
   itemId: string;

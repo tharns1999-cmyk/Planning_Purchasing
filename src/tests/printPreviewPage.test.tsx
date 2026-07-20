@@ -118,6 +118,50 @@ describe('PHASE 4B — Print Preview Page Tests', () => {
     expect(highlights.length).toBeGreaterThanOrEqual(2);
   });
 
+  it('3.1 Print Preview Card UI Hierarchy: Excludes PO number, emphasizes product name & customer name, shows "ผลิต:" and "ได้ FG:"', async () => {
+    const draftRes = plannerRepository.createDraftPlan('2026-07-20');
+    const plan = draftRes.plan!;
+    const queue = plannerRepository.getPlanningQueueData('2026-07-20');
+    const fgItem = queue.fgItems[0]!;
+
+    const createRes = plannerRepository.createFgAllocation({
+      planId: plan.id,
+      salesOrderId: fgItem.salesOrderId,
+      salesOrderLineId: fgItem.salesOrderLineId,
+      productionDate: '2026-07-20',
+      roomId: 'R1',
+      plannedQty: 10,
+      unit: fgItem.unit,
+      plannedUnit: 'ชุด',
+      fgOutputQty: 20,
+      fgOutputUnit: fgItem.unit,
+      printCustomerTag: 'ลูกค้าทดสอบ',
+    });
+    expect(createRes.success).toBe(true);
+
+    render(
+      <MemoryRouter initialEntries={['/print-preview']}>
+        <PrintPreviewPage />
+      </MemoryRouter>
+    );
+
+    const line = plannerRepository.getSnapshot().entities.salesOrderLines.find((l) => l.id === fgItem.salesOrderLineId);
+
+    await waitFor(() => {
+      expect(screen.getByText(line!.skuName)).toBeInTheDocument();
+      expect(screen.getByText(/ลูกค้า: ลูกค้าทดสอบ/)).toBeInTheDocument();
+      expect(screen.getByText(/ผลิต:/)).toBeInTheDocument();
+      expect(screen.getByText(/ได้ FG:/)).toBeInTheDocument();
+      // PO Number must NOT be displayed in print preview card
+      expect(screen.queryByText(/PO: PO-/)).not.toBeInTheDocument();
+    });
+  });
+
+
+
+
+
+
   it('4. Mode "แผนและผลผลิตจริง" displays actual production metrics', async () => {
     const draftRes = plannerRepository.createDraftPlan('2026-07-20');
     const plan = draftRes.plan!;

@@ -23,6 +23,7 @@ import { LoadingState } from '@/components/common/LoadingState';
 import { ErrorState } from '@/components/common/ErrorState';
 import { EmptyState } from '@/components/common/EmptyState';
 import { CreatePoModal } from './CreatePoModal';
+import { PoDetailModal } from './PoDetailModal';
 import { plannerRepository } from '@/services/plannerService';
 import { SalesOrderWithLinesDetail } from '@/services/repositories/PlannerRepository';
 import { Priority, DueStatus } from '@/domain/types';
@@ -48,11 +49,13 @@ export const OrdersPage: React.FC = () => {
   // Expanded PO cards state
   const [expandedOrderIds, setExpandedOrderIds] = useState<Set<string>>(new Set());
 
-  // Create PO Modal state
+  // Modal states
   const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
+  const [selectedOrderDetail, setSelectedOrderDetail] = useState<SalesOrderWithLinesDetail | null>(null);
 
   // Notice toast state
   const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
+
 
   const loadOrdersData = useCallback(() => {
     setIsLoading(true);
@@ -280,43 +283,71 @@ export const OrdersPage: React.FC = () => {
 
       {/* 4 Summary KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="p-4 bg-white rounded-xl border border-slate-200/90 shadow-2xs flex items-center gap-3.5">
+        <div
+          onClick={() => {
+            setPriorityFilter('ALL');
+            setStatusFilter('ALL');
+          }}
+          className="p-4 bg-white rounded-xl border border-slate-200/90 shadow-2xs flex items-center gap-3.5 cursor-pointer hover:border-sky-400 hover:shadow-md transition-all active:scale-[0.99]"
+        >
           <div className="w-10 h-10 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center shrink-0">
             <FileText className="w-5 h-5" />
           </div>
           <div>
             <div className="text-2xl font-bold text-slate-900 tracking-tight">{metrics.totalPos}</div>
             <div className="text-xs text-slate-500 font-medium">จำนวน PO ทั้งหมด</div>
+            <span className="text-[10px] text-sky-600 font-semibold block mt-0.5">แสดงทั้งหมด</span>
           </div>
         </div>
 
-        <div className="p-4 bg-white rounded-xl border border-slate-200/90 shadow-2xs flex items-center gap-3.5">
+        <div
+          onClick={() => {
+            setPriorityFilter('ALL');
+            setStatusFilter('ALL');
+          }}
+          className="p-4 bg-white rounded-xl border border-slate-200/90 shadow-2xs flex items-center gap-3.5 cursor-pointer hover:border-indigo-400 hover:shadow-md transition-all active:scale-[0.99]"
+        >
           <div className="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
             <Package className="w-5 h-5" />
           </div>
           <div>
             <div className="text-2xl font-bold text-slate-900 tracking-tight">{metrics.totalLinesCount}</div>
             <div className="text-xs text-slate-500 font-medium">จำนวนรายการสินค้า</div>
+            <span className="text-[10px] text-indigo-600 font-semibold block mt-0.5">รวมทุกรายการ</span>
           </div>
         </div>
 
-        <div className="p-4 bg-white rounded-xl border border-slate-200/90 shadow-2xs flex items-center gap-3.5">
+        <div
+          onClick={() => {
+            setPriorityFilter('URGENT');
+            setStatusFilter('ALL');
+          }}
+          className="p-4 bg-white rounded-xl border border-slate-200/90 shadow-2xs flex items-center gap-3.5 cursor-pointer hover:border-rose-400 hover:shadow-md transition-all active:scale-[0.99]"
+        >
           <div className="w-10 h-10 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
             <Flame className="w-5 h-5" />
           </div>
           <div>
             <div className="text-2xl font-bold text-rose-600 tracking-tight">{metrics.urgentLinesCount}</div>
             <div className="text-xs text-slate-500 font-medium">รายการสินค้าด่วน</div>
+            <span className="text-[10px] text-rose-600 font-semibold block mt-0.5">กรองเฉพาะรายการด่วน →</span>
           </div>
         </div>
 
-        <div className="p-4 bg-white rounded-xl border border-slate-200/90 shadow-2xs flex items-center gap-3.5">
+        <div
+          onClick={() => {
+            setPriorityFilter('ALL');
+            setStatusFilter('UNPLANNED');
+          }}
+          className="p-4 bg-white rounded-xl border border-slate-200/90 shadow-2xs flex items-center gap-3.5 cursor-pointer hover:border-amber-400 hover:shadow-md transition-all active:scale-[0.99]"
+        >
           <div className="w-10 h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
             <Layers className="w-5 h-5" />
           </div>
           <div>
             <div className="text-2xl font-bold text-amber-600 tracking-tight">{metrics.unplannedLinesCount}</div>
             <div className="text-xs text-slate-500 font-medium">รายการยังไม่วางแผน</div>
+            <span className="text-[10px] text-amber-600 font-semibold block mt-0.5">กรองยังไม่วางแผน →</span>
           </div>
         </div>
       </div>
@@ -333,15 +364,36 @@ export const OrdersPage: React.FC = () => {
           />
         </div>
 
-        {/* Filters */}
+        {/* Filters & Active Indicator */}
         <div className="flex flex-wrap items-center gap-3">
+          {(searchQuery !== '' || priorityFilter !== 'ALL' || statusFilter !== 'ALL') && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-sky-700 bg-sky-50 border border-sky-200 px-2.5 py-1 rounded-lg">
+                กำลังดู: {priorityFilter === 'URGENT' ? 'รายการด่วน' : statusFilter === 'UNPLANNED' ? 'ยังไม่วางแผน' : 'ผลการกรอง'}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSearchQuery('');
+                  setPriorityFilter('ALL');
+                  setStatusFilter('ALL');
+                }}
+                leftIcon={<X className="w-3.5 h-3.5" />}
+              >
+                ล้างตัวกรอง
+              </Button>
+
+            </div>
+          )}
+
           <div className="w-40">
             <Select
               value={priorityFilter}
               onChange={(e) => setPriorityFilter(e.target.value)}
               leftIcon={<Filter className="w-3.5 h-3.5 text-slate-400" />}
               options={[
-                { value: 'ALL', label: 'ความด่วน: ทุกระดับ' },
+                { value: 'ALL', label: 'ความด่วน: ทั้งหมด' },
                 { value: 'NORMAL', label: 'ความด่วน: ปกติ' },
                 { value: 'URGENT', label: 'ความด่วน: ด่วน' },
               ]}
@@ -354,7 +406,7 @@ export const OrdersPage: React.FC = () => {
               onChange={(e) => setStatusFilter(e.target.value)}
               leftIcon={<Filter className="w-3.5 h-3.5 text-slate-400" />}
               options={[
-                { value: 'ALL', label: 'สถานะ: ทุกสถานะ' },
+                { value: 'ALL', label: 'สถานะ: ทั้งหมด' },
                 { value: 'UNPLANNED', label: 'ยังไม่วางแผน' },
                 { value: 'PARTIAL', label: 'วางแผนบางส่วน' },
                 { value: 'FULLY', label: 'วางแผนครบแล้ว' },
@@ -370,8 +422,18 @@ export const OrdersPage: React.FC = () => {
           title="ไม่พบรายการใบสั่งซื้อ"
           message="ไม่พบข้อมูล PO ที่ตรงกับคำค้นหาหรือตัวกรองที่เลือกไว้"
           icon={<FileText className="w-6 h-6" />}
+          actionLabel="ล้างตัวกรอง"
+          onAction={() => {
+            setSearchQuery('');
+            setPriorityFilter('ALL');
+            setStatusFilter('ALL');
+          }}
         />
       ) : (
+
+
+
+
         <div className="space-y-4">
           {filteredOrders.map((detail) => {
             const { order, lines, totalLines, totalOrderedQty, totalRemainingQty } = detail;
@@ -389,12 +451,12 @@ export const OrdersPage: React.FC = () => {
             return (
               <div
                 key={order.id}
-                className="bg-white rounded-xl border border-slate-200/90 shadow-2xs overflow-hidden transition-all hover:border-slate-300"
+                className="bg-white rounded-xl border border-slate-200/90 shadow-2xs overflow-hidden transition-all hover:border-sky-300 hover:shadow-md"
               >
                 {/* PO Header Bar */}
                 <div
-                  onClick={() => toggleExpand(order.id)}
-                  className="p-4 md:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer select-none bg-white hover:bg-slate-50/70 transition-colors"
+                  onClick={() => setSelectedOrderDetail(detail)}
+                  className="p-4 md:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer select-none bg-white hover:bg-sky-50/30 transition-colors"
                 >
                   <div className="flex items-start md:items-center gap-3.5">
                     <div className="p-2.5 bg-sky-50 text-sky-700 rounded-lg shrink-0 mt-0.5 md:mt-0">
@@ -402,11 +464,14 @@ export const OrdersPage: React.FC = () => {
                     </div>
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-base font-bold text-slate-900 tracking-tight">
+                        <span className="text-base font-bold text-slate-900 tracking-tight hover:text-sky-600 transition-colors">
                           {order.orderNo}
                         </span>
                         {hasUrgent && <Badge variant="rose" label="ด่วน" />}
                         {poStatusBadge}
+                        <span className="text-[10px] text-sky-600 font-semibold bg-sky-50 px-2 py-0.5 rounded border border-sky-200">
+                          กดเพื่อดูรายละเอียด PO
+                        </span>
                       </div>
                       <div className="flex items-center gap-4 text-xs text-slate-500 mt-1 flex-wrap">
                         <span className="flex items-center gap-1">
@@ -444,17 +509,25 @@ export const OrdersPage: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1 text-sky-600 font-medium text-xs">
-                      <span>{isExpanded ? 'ซ่อน' : 'แสดงรายการ'}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleExpand(order.id);
+                      }}
+                      className="flex items-center gap-1 text-sky-600 hover:text-sky-800 font-medium text-xs py-1 px-2.5 rounded-lg bg-sky-50 hover:bg-sky-100 transition-colors"
+                    >
+                      <span>{isExpanded ? 'ซ่อน' : 'แสดงตาราง'}</span>
                       <motion.span
                         animate={{ rotate: isExpanded ? 180 : 0 }}
                         transition={{ duration: reducedMotion ? 0 : 0.2 }}
                       >
                         <ChevronDown className="w-4 h-4" />
                       </motion.span>
-                    </div>
+                    </button>
                   </div>
                 </div>
+
 
                 {/* Expanded Product Lines Table */}
                 <AnimatePresence initial={false}>
@@ -549,6 +622,14 @@ export const OrdersPage: React.FC = () => {
         onClose={() => setIsCreateModalOpen(false)}
         onSuccess={handleCreatePoSuccess}
       />
+
+      {/* PO Detail Drilldown Modal */}
+      <PoDetailModal
+        isOpen={Boolean(selectedOrderDetail)}
+        onClose={() => setSelectedOrderDetail(null)}
+        orderDetail={selectedOrderDetail}
+      />
     </motion.div>
   );
 };
+
