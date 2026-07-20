@@ -1,0 +1,150 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-thai: "Noto Sans Thai", "Leelawadee UI", Tahoma, system-ui, -apple-system, sans-serif;
+  }
+
+  html, body {
+    font-family: var(--font-thai);
+    background-color: #f8fafc;
+    color: #0f172a;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Custom scrollbars for data-dense tables */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Print & PNG Export CSS for Phase 4B Print Preview */
+.print-preview-scroll-container {
+  overflow-x: auto;
+}
+
+.print-page,
+.png-export-page {
+  overflow: visible;
+  width: 100%;
+  height: auto;
+  max-height: none;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.print-page::-webkit-scrollbar,
+.png-export-page::-webkit-scrollbar,
+.is-exporting-png::-webkit-scrollbar,
+.is-exporting-png *::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.print-table {
+  width: 100% !important;
+  table-layout: fixed;
+}
+
+/* Override styles while exporting PNG */
+.is-exporting-png,
+.is-exporting-png * {
+  overflow: visible !important;
+  max-height: none !important;
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.is-exporting-png .print-preview-scroll-container {
+  overflow: visible !important;
+}
+
+.is-exporting-png .print-page {
+  overflow: visible !important;
+  height: auto !important;
+  max-height: none !important;
+}
+
+.is-exporting-png .print-table {
+  width: 100% !important;
+  table-layout: fixed !important;
+}
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 6mm;
+  }
+
+  body {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  aside,
+  header,
+  .no-print,
+  .print-toolbar {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  .print-page {
+    width: 100% !important;
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  .print-table {
+    width: 100% !important;
+    table-layout: fixed !important;
+  }
+
+  .min-h-screen,
+  .h-screen {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    box-shadow: none !important;
+  }
+
+  table, tr, td, th {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+}
+
