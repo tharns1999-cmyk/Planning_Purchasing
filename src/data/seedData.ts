@@ -212,6 +212,7 @@ export const SEED_PRODUCTS: ProductMaster[] = [
     productCode: 'PROD-BAK-001',
     productName: 'พายไก่ไข่เค็ม 120g',
     defaultUnit: 'ชิ้น',
+    customerId: 'cust-001', // บริษัท อิ่มอร่อย พลาซ่า จำกัด
     active: true,
     createdAt: SEED_TIMESTAMP,
     updatedAt: SEED_TIMESTAMP,
@@ -221,6 +222,7 @@ export const SEED_PRODUCTS: ProductMaster[] = [
     productCode: 'PROD-BAK-002',
     productName: 'ขนมปังเนยสด 200g',
     defaultUnit: 'ชิ้น',
+    customerId: 'cust-001', // บริษัท อิ่มอร่อย พลาซ่า จำกัด
     active: true,
     createdAt: SEED_TIMESTAMP,
     updatedAt: SEED_TIMESTAMP,
@@ -230,6 +232,7 @@ export const SEED_PRODUCTS: ProductMaster[] = [
     productCode: 'PROD-BAK-003',
     productName: 'เค้กฝอยทอง 350g',
     defaultUnit: 'กล่อง',
+    customerId: 'cust-003', // ร้านสะดวกซื้อ เฟรชไบท์
     active: true,
     createdAt: SEED_TIMESTAMP,
     updatedAt: SEED_TIMESTAMP,
@@ -239,6 +242,7 @@ export const SEED_PRODUCTS: ProductMaster[] = [
     productCode: 'PROD-FRT-001',
     productName: 'มะม่วงอบแห้งพรีเมียม 150g',
     defaultUnit: 'ถุง',
+    customerId: 'cust-002', // ห้างสรรพสินค้า เซ็นทรัลฟู้ดฮอลล์
     active: true,
     createdAt: SEED_TIMESTAMP,
     updatedAt: SEED_TIMESTAMP,
@@ -248,6 +252,7 @@ export const SEED_PRODUCTS: ProductMaster[] = [
     productCode: 'PROD-FRT-002',
     productName: 'สับปะรดอบแห้งแว่น 200g',
     defaultUnit: 'ถุง',
+    customerId: 'cust-002', // ห้างสรรพสินค้า เซ็นทรัลฟู้ดฮอลล์
     active: true,
     createdAt: SEED_TIMESTAMP,
     updatedAt: SEED_TIMESTAMP,
@@ -257,6 +262,7 @@ export const SEED_PRODUCTS: ProductMaster[] = [
     productCode: 'PROD-FRT-003',
     productName: 'กล้วยหอมอบกรอบ 100g',
     defaultUnit: 'ซอง',
+    customerId: 'cust-003', // ร้านสะดวกซื้อ เฟรชไบท์
     active: true,
     createdAt: SEED_TIMESTAMP,
     updatedAt: SEED_TIMESTAMP,
@@ -266,6 +272,7 @@ export const SEED_PRODUCTS: ProductMaster[] = [
     productCode: 'PROD-BAK-004',
     productName: 'ขนมปังโฮลวีต 400g',
     defaultUnit: 'แถว',
+    customerId: 'cust-001', // บริษัท อิ่มอร่อย พลาซ่า จำกัด
     active: true,
     createdAt: SEED_TIMESTAMP,
     updatedAt: SEED_TIMESTAMP,
@@ -275,6 +282,7 @@ export const SEED_PRODUCTS: ProductMaster[] = [
     productCode: 'PROD-CKI-001',
     productName: 'คุกกี้เนยอัลมอนด์ 180g',
     defaultUnit: 'กระปุก',
+    customerId: 'cust-002', // ห้างสรรพสินค้า เซ็นทรัลฟู้ดฮอลล์
     active: true,
     createdAt: SEED_TIMESTAMP,
     updatedAt: SEED_TIMESTAMP,
@@ -284,6 +292,7 @@ export const SEED_PRODUCTS: ProductMaster[] = [
     productCode: 'PROD-TRT-001',
     productName: 'ทาร์ตผลไม้สด 150g',
     defaultUnit: 'ชิ้น',
+    customerId: 'cust-004', // บจก. สยามแม็คโคร ฟู้ดเซ็นเตอร์
     active: true,
     createdAt: SEED_TIMESTAMP,
     updatedAt: SEED_TIMESTAMP,
@@ -293,11 +302,13 @@ export const SEED_PRODUCTS: ProductMaster[] = [
     productCode: 'PROD-BRN-001',
     productName: 'บราวนี่ช็อกโกแลตเข้มข้น 80g',
     defaultUnit: 'ชิ้น',
+    customerId: 'cust-003', // ร้านสะดวกซื้อ เฟรชไบท์
     active: true,
     createdAt: SEED_TIMESTAMP,
     updatedAt: SEED_TIMESTAMP,
   },
 ];
+
 
 export const INITIAL_SEED_ENTITIES: DatabaseEntities = {
   rooms: SEED_ROOMS,

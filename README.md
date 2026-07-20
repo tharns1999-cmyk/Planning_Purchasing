@@ -1,6 +1,6 @@
-# Weekly Production Planner (ระบบวางแผนการผลิตประจำสัปดาห์) — Prototype v1.1
+# Weekly Production Planner (ระบบวางแผนการผลิตประจำสัปดาห์) — Prototype v1.2
 
-ระบบเว็บแอปพลิเคชันสำหรับวางแผนการผลิตรายสัปดาห์ (Weekly Production Planner) รองรับการจัดการใบสั่งซื้อ (Sales Orders), ข้อมูลหลักลูกค้าและสินค้า (Master Data), การจัดสรรแผนบนกระดานวางแผน (Planning Board Shell), การจัดการฉบับแก้ไขแผน (Plan Revisions R00/R01/...), การบันทึกผลผลิตจริง (Production Actual), การแสดงตัวอย่างก่อนพิมพ์/ส่งออกภาพ PNG (Print Preview), ปฏิทินการจัดส่ง (Delivery Calendar) และเครื่องมือจัดการข้อมูล (Data Tools)
+ระบบเว็บแอปพลิเคชันสำหรับวางแผนการผลิตรายสัปดาห์ (Weekly Production Planner) รองรับการจัดการใบสั่งซื้อ (Sales Orders), ข้อมูลหลักลูกค้าและสินค้าผูกตรงตามลูกค้า (Customer-Linked Master Data), การจัดสรรแผนบนกระดานวางแผน (Planning Board Shell), การจัดการฉบับแก้ไขแผน (Plan Revisions R00/R01/...), การบันทึกผลผลิตจริง (Production Actual), การแสดงตัวอย่างก่อนพิมพ์/ส่งออกภาพ PNG (Print Preview), ปฏิทินการจัดส่ง (Delivery Calendar) และเครื่องมือจัดการข้อมูล (Data Tools)
 
 ---
 
@@ -27,7 +27,7 @@ npm install
 ```bash
 npm run dev
 ```
-เข้าใช้งานผ่านเบราว์เซอร์ที่: `http://localhost:5173`
+เข้าใช้งานผ่านเบราว์เซอร์ที่: `http://localhost:3000`
 
 ### 3. รันชุดทดสอบ (Tests)
 ```bash
@@ -49,17 +49,17 @@ npm run build
 ## 📱 รายชื่อหน้าหลักของระบบ (Main Pages)
 
 1. **Dashboard (ภาพรวมระบบ)**: สรุป KPI ตัวเลขสำคัญ รายการ PO ด่วน และสถิติการวางแผน
-2. **Sales Orders (รายการสั่งซื้อ)**: จัดการและค้นหาใบสั่งซื้อ (PO Header & Line Items) พร้อมสร้าง PO ใหม่โดยเลือกลูกค้าและสินค้าจาก Master Data
-3. **Master Data (ข้อมูลหลัก - `/masters`)**: จัดการรายชื่อลูกค้า (Customer Master) และสินค้า (Product Master) รองรับการแก้ไข และเปิด/ปิดใช้งาน
+2. **Sales Orders (รายการสั่งซื้อ)**: จัดการและค้นหาใบสั่งซื้อ (PO Header & Line Items) พร้อมสร้าง PO ใหม่โดยเลือกลูกค้าและสินค้าแบบ Autocomplete
+3. **Master Data (ข้อมูลหลัก - `/masters`)**: จัดการรายชื่อลูกค้า (Customer Master) และสินค้าผูกตามลูกค้า (Product Master with `customerId`) รองรับการค้นหา กรอง และเปิด/ปิดใช้งาน
 4. **Planning Board (กระดานวางแผนการผลิต)**: วางแผนรายสัปดาห์ (จันทร์–เสาร์ x 4 ห้องผลิต R1–R4) รองรับการลากวาง (Drag & Drop), เพิ่ม Board Note, กำหนด Customer Tag & Highlight
 5. **Production Actual (บันทึกผลผลิตจริง)**: บันทึกของดี (Good Qty), ของเสีย (Waste Qty), งานแก้ไข (Rework Qty) และสาเหตุของขาด (Shortfall Reason)
 6. **Print Preview (ตัวอย่างก่อนพิมพ์ & Export PNG)**: แสดงแผนแบบเต็มหน้าสำหรับพิมพ์ A4 Landscape และดาวน์โหลด PNG ความละเอียดสูงแบบไม่มี scrollbar
 7. **Delivery Calendar (ปฏิทินส่งสินค้า)**: สรุปรายการจัดส่งตาม `dueDate` คำนวณยอดจัดสรรจาก `fgOutputQty`
-8. **Data Tools (เครื่องมือจัดการข้อมูล)**: ดูสถิติข้อมูล (รวมทั้งสิ้น 10 เอนทิตี), Export / Import JSON Backup และ Reset ข้อมูลระบบ
+8. **Data Tools (เครื่องมือจัดการข้อมูล)**: ดูสถิติข้อมูล, Export / Import JSON Backup และ Reset ข้อมูลระบบ
 
 ---
 
 ## ⚠️ ข้อจำกัดปัจจุบัน (Current Limitations)
 
-- ระบบในเวอร์ชันนี้เป็น **LocalStorage Prototype (v1.1 Freeze)** ข้อมูลทั้งหมดถูกจัดเก็บใน `localStorage` ของเบราว์เซอร์
+- ระบบในเวอร์ชันนี้เป็น **LocalStorage Prototype (v1.2 Customer-Linked Master Data)** ข้อมูลทั้งหมดถูกจัดเก็บใน `localStorage` ของเบราว์เซอร์
 - ยังไม่ได้เชื่อมต่อกับ **Google Sheets API / Backend Database** (มีกำหนดพัฒนาใน Phase ถัดไป)

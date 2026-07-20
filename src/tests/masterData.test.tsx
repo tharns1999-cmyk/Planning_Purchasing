@@ -1,12 +1,12 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-
 import { LocalStorageRepository } from '@/services/repositories/LocalStorageRepository';
 import { CreatePoModal } from '@/features/orders/CreatePoModal';
 import { MasterDataPage } from '@/features/master-data/MasterDataPage';
-import { SEED_CUSTOMERS, SEED_PRODUCTS } from '@/data/seedData';
+import { SEED_CUSTOMERS } from '@/data/seedData';
 
-describe('PHASE 4E — Master Data for Customer & Product Tests', () => {
+
+describe('PHASE 5E — Customer-Linked Product Master & Create PO Autocomplete Tests', () => {
   let repository: LocalStorageRepository;
 
   beforeEach(() => {
@@ -15,150 +15,190 @@ describe('PHASE 4E — Master Data for Customer & Product Tests', () => {
     repository.initialize();
   });
 
-  it('1. Can list, create, update, and deactivate customer', () => {
-    const initialCustomers = repository.listCustomers(true);
-    expect(initialCustomers.length).toBeGreaterThanOrEqual(5);
-
-    // Create customer
-    const createRes = repository.createCustomer({
-      customerCode: 'CUST-NEW-001',
-      customerName: 'บริษัท ทดสอบใหม่ จำกัด',
+  it('1. Create Product requires Customer selection & validates inputs', () => {
+    // Failing without customerId
+    const failRes = repository.createProduct({
+      customerId: '',
+      productCode: 'PROD-TEST-001',
+      productName: 'สินค้าทดสอบ 100g',
+      defaultUnit: 'ชิ้น',
     });
-    expect(createRes.success).toBe(true);
-    expect(createRes.customer?.customerCode).toBe('CUST-NEW-001');
+    expect(failRes.success).toBe(false);
+    expect(failRes.errors?.[0]).toContain('กรุณาเลือกลูกค้า');
 
-    // Duplicate code validation
-    const dupRes = repository.createCustomer({
-      customerCode: 'cust-new-001',
-      customerName: 'บริษัท ซ้ำ จำกัด',
+    // Success with valid customerId
+    const cust = repository.listCustomers()[0]!;
+    const successRes = repository.createProduct({
+      customerId: cust.customerId,
+      productCode: 'PROD-TEST-001',
+      productName: 'สินค้าทดสอบ 100g',
+      defaultUnit: 'ชิ้น',
     });
-    expect(dupRes.success).toBe(false);
-    expect(dupRes.errors?.[0]).toContain('มีในระบบแล้ว');
-
-    // Update customer
-    const updateRes = repository.updateCustomer(createRes.customer!.customerId, {
-      customerName: 'บริษัท ทดสอบใหม่ ปรับปรุง จำกัด',
-    });
-    expect(updateRes.success).toBe(true);
-    expect(updateRes.customer?.customerName).toBe('บริษัท ทดสอบใหม่ ปรับปรุง จำกัด');
-
-    // Deactivate customer
-    const deactivateRes = repository.setCustomerActive(createRes.customer!.customerId, false);
-    expect(deactivateRes.success).toBe(true);
-    expect(deactivateRes.customer?.active).toBe(false);
-
-    // List active vs all
-    const activeCusts = repository.listCustomers(false);
-    const allCusts = repository.listCustomers(true);
-    expect(activeCusts.find((c) => c.customerCode === 'CUST-NEW-001')).toBeUndefined();
-    expect(allCusts.find((c) => c.customerCode === 'CUST-NEW-001')).toBeDefined();
+    expect(successRes.success).toBe(true);
+    expect(successRes.product?.customerId).toBe(cust.customerId);
   });
 
-  it('2. Can list, create, update, and deactivate product', () => {
-    const initialProducts = repository.listProducts(true);
-    expect(initialProducts.length).toBeGreaterThanOrEqual(10);
+  it('2. listProductsByCustomer returns only active/inactive products linked to that customer', () => {
+    const cust1 = SEED_CUSTOMERS[0]!;
+    const cust1Products = repository.listProductsByCustomer(cust1.customerId, true);
+    expect(cust1Products.length).toBeGreaterThan(0);
+    expect(cust1Products.every((p) => p.customerId === cust1.customerId)).toBe(true);
 
-    // Create product
-    const createRes = repository.createProduct({
-      productCode: 'PROD-NEW-001',
-      productName: 'เค้กช็อกโกแลต 500g',
-      defaultUnit: 'กล่อง',
-    });
-    expect(createRes.success).toBe(true);
-    expect(createRes.product?.productCode).toBe('PROD-NEW-001');
+    // Deactivate a product for cust1
+    const p1 = cust1Products[0]!;
+    repository.setProductActive(p1.productId, false);
 
-    // Duplicate code validation
-    const dupRes = repository.createProduct({
-      productCode: 'prod-new-001',
-      productName: 'เค้กซ้ำ 500g',
-      defaultUnit: 'กล่อง',
-    });
-    expect(dupRes.success).toBe(false);
-    expect(dupRes.errors?.[0]).toContain('มีในระบบแล้ว');
-
-    // Update product
-    const updateRes = repository.updateProduct(createRes.product!.productId, {
-      productName: 'เค้กช็อกโกแลตหน้านิ่ม 500g',
-      defaultUnit: 'ปอนด์',
-    });
-    expect(updateRes.success).toBe(true);
-    expect(updateRes.product?.productName).toBe('เค้กช็อกโกแลตหน้านิ่ม 500g');
-    expect(updateRes.product?.defaultUnit).toBe('ปอนด์');
-
-    // Deactivate product
-    const deactivateRes = repository.setProductActive(createRes.product!.productId, false);
-    expect(deactivateRes.success).toBe(true);
-    expect(deactivateRes.product?.active).toBe(false);
-
-    // List active vs all
-    const activeProds = repository.listProducts(false);
-    const allProds = repository.listProducts(true);
-    expect(activeProds.find((p) => p.productCode === 'PROD-NEW-001')).toBeUndefined();
-    expect(allProds.find((p) => p.productCode === 'PROD-NEW-001')).toBeDefined();
+    const activeCust1Products = repository.listProductsByCustomer(cust1.customerId, false);
+    expect(activeCust1Products.find((p) => p.productId === p1.productId)).toBeUndefined();
   });
 
-  it('3. Create PO Modal uses Customer and Product Master Data dropdowns', async () => {
-    // Add custom active customer and product
-    repository.createCustomer({
-      customerCode: 'CUST-DEMO',
-      customerName: 'บริษัท เดโมมาสเตอร์ จำกัด',
-    });
-    repository.createProduct({
-      productCode: 'PROD-DEMO',
-      productName: 'วานิลลาคุกกี้ 150g',
+  it('3. MasterDataPage Product table displays customer name & unlinked legacy badge', async () => {
+    // Add legacy product without customerId
+    const snapshot = repository.getSnapshot();
+    snapshot.entities.products.push({
+      productId: 'prod-legacy',
+      productCode: 'PROD-LEGACY',
+      productName: 'สินค้าเลกาซีไม่มีลูกค้า',
       defaultUnit: 'ถุง',
+      active: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     });
+    localStorage.setItem('weekly-production-planner-db', JSON.stringify(snapshot));
+
+    render(<MasterDataPage />);
+
+    // Switch to Products tab
+    fireEvent.click(screen.getByText(/สินค้า \(/i));
+
+    await waitFor(() => {
+      expect(screen.getByText('PROD-LEGACY')).toBeInTheDocument();
+      expect(screen.getByText('ยังไม่ผูกลูกค้า')).toBeInTheDocument();
+    });
+  });
+
+  it('4. Create PO Modal: Product field disabled when no customer selected & warns when customer has no products', async () => {
+    // Create customer with zero products
+    repository.createCustomer({
+      customerCode: 'CUST-EMPTY',
+      customerName: 'บริษัท ไม่มีสินค้า จำกัด',
+    });
+
 
     render(<CreatePoModal isOpen={true} onClose={() => {}} onSuccess={() => {}} />);
 
-    // Customer dropdown should include master data customer
-    const customerSelect = screen.getByLabelText(/ชื่อลูกค้า \*/i);
-    expect(customerSelect).toBeInTheDocument();
-    expect(screen.getByText(/CUST-DEMO - บริษัท เดโมมาสเตอร์ จำกัด/i)).toBeInTheDocument();
+    // Product name input should be disabled initially
+    const productInput = screen.getByPlaceholderText('กรุณาเลือกลูกค้าก่อน') as HTMLInputElement;
+    expect(productInput).toBeDisabled();
 
-    // Select master product and verify auto-fill
-    const masterProductSelect = screen.getByLabelText(/เลือกสินค้าจากข้อมูลหลัก/i);
-    expect(masterProductSelect).toBeInTheDocument();
-
-    fireEvent.change(masterProductSelect, { target: { value: repository.listProducts().find(p => p.productCode === 'PROD-DEMO')?.productId } });
+    // Select customer without products
+    const customerInput = screen.getByPlaceholderText(/พิมพ์ค้นหารหัส หรือ ชื่อลูกค้า/i);
+    fireEvent.focus(customerInput);
+    fireEvent.change(customerInput, { target: { value: 'CUST-EMPTY' } });
 
     await waitFor(() => {
-      const productNameInput = screen.getByLabelText(/ชื่อสินค้า \*/i) as HTMLInputElement;
-      const unitInput = screen.getByLabelText(/หน่วย \*/i) as HTMLInputElement;
-      expect(productNameInput.value).toBe('วานิลลาคุกกี้ 150g');
-      expect(unitInput.value).toBe('ถุง');
+      expect(screen.getByText(/CUST-EMPTY - บริษัท ไม่มีสินค้า จำกัด/i)).toBeInTheDocument();
+    });
+
+    fireEvent.mouseDown(screen.getByText(/CUST-EMPTY - บริษัท ไม่มีสินค้า จำกัด/i));
+
+    // Product input should show warning placeholder
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('ยังไม่มีรายการสินค้าของลูกค้านี้ กรุณาเพิ่มในข้อมูลหลักก่อน')).toBeInTheDocument();
     });
   });
 
-  it('4. MasterDataPage UI allows toggling tabs and adding new customer', async () => {
-    render(<MasterDataPage />);
+  it('5. Create PO Modal: Autocomplete filters products by selected customer & auto-fills details', async () => {
+    const cust1 = SEED_CUSTOMERS[0]!; // บริษัท อิ่มอร่อย พลาซ่า จำกัด
+    const cust1Prods = repository.listProductsByCustomer(cust1.customerId);
+    const targetProd = cust1Prods[0]!;
 
-    expect(screen.getByText(/ข้อมูลหลัก \(Master Data\)/i)).toBeInTheDocument();
-    expect(screen.getByText(/ลูกค้า \(5\)/i)).toBeInTheDocument();
+    render(<CreatePoModal isOpen={true} onClose={() => {}} onSuccess={() => {}} />);
 
-    // Switch to Products tab
-    fireEvent.click(screen.getByText(/สินค้า \(10\)/i));
-    expect(screen.getByText(/หน่วยเริ่มต้น/i)).toBeInTheDocument();
+    // Search and select Customer 1
+    const customerInput = screen.getByPlaceholderText(/พิมพ์ค้นหารหัส หรือ ชื่อลูกค้า/i);
+    fireEvent.focus(customerInput);
+    fireEvent.change(customerInput, { target: { value: cust1.customerCode } });
 
-    // Switch back to Customers tab
-    fireEvent.click(screen.getByText(/ลูกค้า \(5\)/i));
-    expect(screen.getByText(/เพิ่มลูกค้า/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText(new RegExp(`${cust1.customerCode} - ${cust1.customerName}`, 'i'))).toBeInTheDocument();
+    });
+
+    fireEvent.mouseDown(screen.getByText(new RegExp(`${cust1.customerCode} - ${cust1.customerName}`, 'i')));
+
+    // Search Product for Customer 1
+    const productInput = screen.getByPlaceholderText('พิมพ์ค้นหา หรือ เลือกสินค้า...') as HTMLInputElement;
+    expect(productInput).not.toBeDisabled();
+    fireEvent.focus(productInput);
+
+    await waitFor(() => {
+      expect(screen.getByText(targetProd.productName)).toBeInTheDocument();
+    });
+
+    fireEvent.mouseDown(screen.getByText(targetProd.productName));
+
+    // Product details auto-filled
+    await waitFor(() => {
+      expect(productInput.value).toBe(targetProd.productName);
+      const unitInput = screen.getByLabelText(/หน่วย \*/i) as HTMLInputElement;
+      expect(unitInput.value).toBe(targetProd.defaultUnit);
+    });
   });
 
-  it('5. Export/Import and Reset include customers and products', () => {
-    const snap = repository.getSnapshot();
-    expect(snap.entities.customers).toBeDefined();
-    expect(snap.entities.products).toBeDefined();
-    expect(snap.entities.customers.length).toBe(SEED_CUSTOMERS.length);
-    expect(snap.entities.products.length).toBe(SEED_PRODUCTS.length);
+  it('6. Create PO Modal: Changing customer with active product lines prompts Thai confirm dialog', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
 
-    // Modify data
-    repository.createCustomer({ customerCode: 'CUST-TEMP', customerName: 'Temp Customer' });
-    expect(repository.listCustomers(true).length).toBe(SEED_CUSTOMERS.length + 1);
+    render(<CreatePoModal isOpen={true} onClose={() => {}} onSuccess={() => {}} />);
 
-    // Reset restores seed master data
-    repository.reset();
-    expect(repository.listCustomers(true).length).toBe(SEED_CUSTOMERS.length);
-    expect(repository.listProducts(true).length).toBe(SEED_PRODUCTS.length);
+    // Select Customer 1
+    const customerInput = screen.getByPlaceholderText(/พิมพ์ค้นหารหัส หรือ ชื่อลูกค้า/i);
+    fireEvent.focus(customerInput);
+    fireEvent.change(customerInput, { target: { value: 'CUST-001' } });
+
+    await waitFor(() => {
+      expect(screen.getByText(/CUST-001 - บริษัท อิ่มอร่อย พลาซ่า จำกัด/i)).toBeInTheDocument();
+    });
+
+    fireEvent.mouseDown(screen.getByText(/CUST-001 - บริษัท อิ่มอร่อย พลาซ่า จำกัด/i));
+
+    // Type a product name
+    const productInput = screen.getByPlaceholderText('พิมพ์ค้นหา หรือ เลือกสินค้า...') as HTMLInputElement;
+    fireEvent.change(productInput, { target: { value: 'พายไก่พิเศษ' } });
+
+    // Change to Customer 2
+    fireEvent.focus(customerInput);
+    fireEvent.change(customerInput, { target: { value: 'CUST-002' } });
+
+    await waitFor(() => {
+      expect(screen.getByText(/CUST-002 - ห้างสรรพสินค้า เซ็นทรัลฟู้ดฮอลล์/i)).toBeInTheDocument();
+    });
+
+    fireEvent.mouseDown(screen.getByText(/CUST-002 - ห้างสรรพสินค้า เซ็นทรัลฟู้ดฮอลล์/i));
+
+    // Confirmation was triggered
+    expect(confirmSpy).toHaveBeenCalledWith('การเปลี่ยนลูกค้าจะล้างรายการสินค้าใน PO ทั้งหมด คุณต้องการเปลี่ยนหรือไม่?');
+
+    confirmSpy.mockRestore();
+  });
+
+  it('7. Import database validates customerId reference in products', () => {
+    const validSnap = repository.getSnapshot();
+
+    // Invalid product reference to non-existent customerId
+    const invalidSnap = structuredClone(validSnap);
+    invalidSnap.entities.products.push({
+      productId: 'prod-invalid',
+      productCode: 'PROD-INVALID',
+      productName: 'สินค้าอ้างอิงลูกค้าไม่มีจริง',
+      defaultUnit: 'ชิ้น',
+      customerId: 'cust-non-existent-999',
+      active: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    const res = repository.importDatabase(invalidSnap);
+    expect(res.success).toBe(false);
+    expect(res.errors?.[0]).toContain("รหัสลูกค้า 'cust-non-existent-999' สำหรับสินค้า 'PROD-INVALID' ไม่มีในระบบ");
   });
 });

@@ -203,7 +203,20 @@ export class LocalStorageRepository implements PlannerRepository {
       };
     }
 
+    // Validate customerId reference for non-legacy products
+    const customerIds = new Set((parsed.entities!.customers || []).map((c) => c.customerId));
+    const invalidProductRef = (parsed.entities!.products || []).find(
+      (p) => p.customerId && !customerIds.has(p.customerId)
+    );
+    if (invalidProductRef) {
+      return {
+        success: false,
+        errors: [`รหัสลูกค้า '${invalidProductRef.customerId}' สำหรับสินค้า '${invalidProductRef.productCode}' ไม่มีในระบบ`],
+      };
+    }
+
     const now = this.clock.nowISO();
+
     const importedSchema: DatabaseSchema = {
       schemaVersion: parsed.schemaVersion || CURRENT_SCHEMA_VERSION,
       initializedAt: parsed.initializedAt || now,
@@ -1711,15 +1724,24 @@ export class LocalStorageRepository implements PlannerRepository {
     return list.filter((p) => p.active);
   }
 
+  public listProductsByCustomer(customerId: string, includeInactive = false): ProductMaster[] {
+    const snapshot = this.getSnapshot();
+    const list = (snapshot.entities.products || []).filter((p) => p.customerId === customerId);
+    if (includeInactive) return list;
+    return list.filter((p) => p.active);
+  }
+
   public createProduct(input: CreateProductInput): CreateProductResult {
     const errors: string[] = [];
+    const custId = (input.customerId || '').trim();
     const code = (input.productCode || '').trim();
     const name = (input.productName || '').trim();
     const unit = (input.defaultUnit || '').trim();
 
-    if (!code) errors.push('productCode is required');
-    if (!name) errors.push('productName is required');
-    if (!unit) errors.push('defaultUnit is required');
+    if (!custId) errors.push('กรุณาเลือกลูกค้า');
+    if (!code) errors.push('กรุณากรอกรหัสสินค้า');
+    if (!name) errors.push('กรุณากรอกชื่อสินค้า');
+    if (!unit) errors.push('กรุณากรอกหน่วยเริ่มต้น');
 
     const snapshot = this.getSnapshot();
     if (!snapshot.entities.products) snapshot.entities.products = [];
@@ -1733,6 +1755,7 @@ export class LocalStorageRepository implements PlannerRepository {
     const now = this.clock.nowISO();
     const newProduct: ProductMaster = {
       productId: this.idGenerator.generateId('prod'),
+      customerId: custId,
       productCode: code,
       productName: name,
       defaultUnit: unit,
@@ -1756,13 +1779,15 @@ export class LocalStorageRepository implements PlannerRepository {
     if (!prod) return { success: false, errors: ['Product not found'] };
 
     const errors: string[] = [];
+    const newCustId = input.customerId !== undefined ? input.customerId.trim() : (prod.customerId || '');
     const newCode = input.productCode !== undefined ? input.productCode.trim() : prod.productCode;
     const newName = input.productName !== undefined ? input.productName.trim() : prod.productName;
     const newUnit = input.defaultUnit !== undefined ? input.defaultUnit.trim() : prod.defaultUnit;
 
-    if (!newCode) errors.push('productCode is required');
-    if (!newName) errors.push('productName is required');
-    if (!newUnit) errors.push('defaultUnit is required');
+    if (!newCustId) errors.push('กรุณาเลือกลูกค้า');
+    if (!newCode) errors.push('กรุณากรอกรหัสสินค้า');
+    if (!newName) errors.push('กรุณากรอกชื่อสินค้า');
+    if (!newUnit) errors.push('กรุณากรอกหน่วยเริ่มต้น');
 
     if (
       newCode &&
@@ -1776,6 +1801,7 @@ export class LocalStorageRepository implements PlannerRepository {
     if (errors.length > 0) return { success: false, errors };
 
     const now = this.clock.nowISO();
+    prod.customerId = newCustId;
     prod.productCode = newCode;
     prod.productName = newName;
     prod.defaultUnit = newUnit;
@@ -1786,6 +1812,7 @@ export class LocalStorageRepository implements PlannerRepository {
 
     return { success: true, product: prod };
   }
+
 
   public setProductActive(productId: string, active: boolean): SetProductActiveResult {
     const snapshot = this.getSnapshot();

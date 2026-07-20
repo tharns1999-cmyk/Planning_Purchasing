@@ -46,16 +46,19 @@ export interface SetCustomerActiveResult {
 }
 
 export interface CreateProductInput {
+  customerId: string;
   productCode: string;
   productName: string;
   defaultUnit: string;
 }
 
 export interface UpdateProductInput {
+  customerId?: string;
   productCode?: string;
   productName?: string;
   defaultUnit?: string;
 }
+
 
 export interface CreateProductResult {
   success: boolean;
@@ -579,8 +582,10 @@ export interface PlannerRepository {
    * Product Master Data Methods
    */
   listProducts(includeInactive?: boolean): ProductMaster[];
+  listProductsByCustomer(customerId: string, includeInactive?: boolean): ProductMaster[];
   createProduct(input: CreateProductInput): CreateProductResult;
   updateProduct(productId: string, input: UpdateProductInput): UpdateProductResult;
   setProductActive(productId: string, active: boolean): SetProductActiveResult;
 }
+
 

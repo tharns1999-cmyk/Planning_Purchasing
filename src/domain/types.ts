@@ -155,9 +155,11 @@ export interface ProductMaster {
   productCode: string;
   productName: string;
   defaultUnit: string;
+  customerId?: string; // Links product to a customer (optional for legacy products)
   active: boolean;
   createdAt: string;
   updatedAt: string;
 }
+
 
 

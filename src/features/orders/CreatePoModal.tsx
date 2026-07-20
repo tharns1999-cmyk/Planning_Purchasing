@@ -1,13 +1,14 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { Plus, Trash2, FileText, Package, AlertCircle } from 'lucide-react';
 import { Modal } from '@/components/common/Modal';
 import { Button } from '@/components/common/Button';
 import { Input } from '@/components/common/Input';
-import { Select, SelectOption } from '@/components/common/Select';
+import { Select } from '@/components/common/Select';
 import { Textarea } from '@/components/common/Textarea';
+import { Autocomplete, AutocompleteOption } from '@/components/common/Autocomplete';
 import { plannerRepository } from '@/services/plannerService';
-import { Priority } from '@/domain/types';
+import { Priority, CustomerMaster, ProductMaster } from '@/domain/types';
 import {
   CreateSalesOrderHeaderInput,
   CreateSalesOrderLineInput,
@@ -20,6 +21,7 @@ export interface CreatePoModalProps {
 }
 
 export interface UIProductLine {
+  productCode?: string;
   productName: string;
   orderedQty: number;
   unit: string;
@@ -27,13 +29,12 @@ export interface UIProductLine {
 }
 
 const DEFAULT_LINE: UIProductLine = {
+  productCode: '',
   productName: '',
   orderedQty: 100,
   unit: 'ชิ้น',
   dueDate: new Date().toISOString().slice(0, 10),
 };
-
-
 
 export const CreatePoModal: React.FC<CreatePoModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const reducedMotion = useReducedMotion() ?? false;
@@ -46,41 +47,57 @@ export const CreatePoModal: React.FC<CreatePoModalProps> = ({ isOpen, onClose, o
     note: '',
   });
 
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
+  const [customerDisplayText, setCustomerDisplayText] = useState<string>('');
+
   const [lines, setLines] = useState<UIProductLine[]>([{ ...DEFAULT_LINE }]);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
-  // Dynamic customer & product options derived from repository Master Data
-  const { customerOptions, productOptions, isMasterDataEmpty } = useMemo(() => {
+  // Active Customers from Master Data
+  const activeCustomers = useMemo<CustomerMaster[]>(() => {
     try {
       plannerRepository.initialize();
-      const customers = plannerRepository.listCustomers(false);
-      const products = plannerRepository.listProducts(false);
-
-      const custOpts: SelectOption[] = [
-        { value: '', label: 'เลือกลูกค้า' },
-        ...customers.map((c) => ({ value: c.customerName, label: `${c.customerCode} - ${c.customerName}` })),
-      ];
-
-      const prodOpts: SelectOption[] = [
-        { value: '', label: 'เลือกสินค้าจากข้อมูลหลัก' },
-        ...products.map((p) => ({ value: p.productId, label: `${p.productCode} - ${p.productName}` })),
-      ];
-
-      const isEmpty = customers.length === 0 || products.length === 0;
-
-      return { customerOptions: custOpts, productOptions: prodOpts, isMasterDataEmpty: isEmpty };
+      return plannerRepository.listCustomers(false);
     } catch {
-      return {
-        customerOptions: [{ value: '', label: 'เลือกลูกค้า' }],
-        productOptions: [{ value: '', label: 'เลือกสินค้าจากข้อมูลหลัก' }],
-        isMasterDataEmpty: true,
-      };
+      return [];
     }
   }, []);
 
+
+  // Autocomplete options for Customers
+  const customerAutocompleteOptions = useMemo<AutocompleteOption[]>(() => {
+    return activeCustomers.map((c) => ({
+      value: c.customerId,
+      label: `${c.customerCode} - ${c.customerName}`,
+      subLabel: c.customerName,
+      data: c,
+    }));
+  }, [activeCustomers]);
+
+  // Active Products for selected Customer
+  const customerProducts = useMemo<ProductMaster[]>(() => {
+    if (!selectedCustomerId) return [];
+    try {
+      plannerRepository.initialize();
+      return plannerRepository.listProductsByCustomer(selectedCustomerId, false);
+    } catch {
+      return [];
+    }
+  }, [selectedCustomerId]);
+
+  // Autocomplete options for Products of selected Customer
+  const productAutocompleteOptions = useMemo<AutocompleteOption[]>(() => {
+    return customerProducts.map((p) => ({
+      value: p.productId,
+      label: p.productName,
+      subLabel: `${p.productCode} (${p.defaultUnit})`,
+      data: p,
+    }));
+  }, [customerProducts]);
+
   // Reset form state on open
-  React.useEffect(() => {
+  useEffect(() => {
     if (isOpen) {
       setHeader({
         poNumber: '',
@@ -89,11 +106,40 @@ export const CreatePoModal: React.FC<CreatePoModalProps> = ({ isOpen, onClose, o
         priority: Priority.NORMAL,
         note: '',
       });
+      setSelectedCustomerId('');
+      setCustomerDisplayText('');
       setLines([{ ...DEFAULT_LINE }]);
       setErrorBanner(null);
       setIsSubmitting(false);
     }
   }, [isOpen]);
+
+  const handleCustomerSelect = (option: AutocompleteOption) => {
+    const cust = option.data as CustomerMaster;
+    if (!cust) return;
+
+    // Check if user has entered any lines content
+    const hasEnteredLines = lines.some((l) => l.productName.trim() !== '');
+
+    if (hasEnteredLines && selectedCustomerId && selectedCustomerId !== cust.customerId) {
+      const confirmChange = window.confirm('การเปลี่ยนลูกค้าจะล้างรายการสินค้าใน PO ทั้งหมด คุณต้องการเปลี่ยนหรือไม่?');
+      if (!confirmChange) {
+        // Revert text to current selected customer
+        const currentCust = activeCustomers.find((c) => c.customerId === selectedCustomerId);
+        if (currentCust) {
+          setCustomerDisplayText(`${currentCust.customerCode} - ${currentCust.customerName}`);
+        }
+        return;
+      }
+    }
+
+    setSelectedCustomerId(cust.customerId);
+    setCustomerDisplayText(`${cust.customerCode} - ${cust.customerName}`);
+    setHeader((prev) => ({ ...prev, customerName: cust.customerName }));
+
+    // Reset product lines when switching customer
+    setLines([{ ...DEFAULT_LINE }]);
+  };
 
   const handleAddLine = () => {
     setLines((prev) => [...prev, { ...DEFAULT_LINE }]);
@@ -102,26 +148,6 @@ export const CreatePoModal: React.FC<CreatePoModalProps> = ({ isOpen, onClose, o
   const handleRemoveLine = (index: number) => {
     if (lines.length <= 1) return;
     setLines((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handleSelectProduct = (index: number, productId: string) => {
-    if (!productId) return;
-    try {
-      const products = plannerRepository.listProducts(true);
-      const found = products.find((p) => p.productId === productId);
-      if (found) {
-        setLines((prev) => {
-          const updated = [...prev];
-          const target = { ...updated[index]! };
-          target.productName = found.productName;
-          target.unit = found.defaultUnit;
-          updated[index] = target;
-          return updated;
-        });
-      }
-    } catch (err) {
-      console.error('Failed to select master product:', err);
-    }
   };
 
   const handleLineChange = (
@@ -142,6 +168,22 @@ export const CreatePoModal: React.FC<CreatePoModalProps> = ({ isOpen, onClose, o
     });
   };
 
+  const handleProductSelect = (index: number, option: AutocompleteOption) => {
+    const prod = option.data as ProductMaster;
+    if (!prod) return;
+
+    setLines((prev) => {
+      const updated = [...prev];
+      updated[index] = {
+        ...updated[index]!,
+        productCode: prod.productCode,
+        productName: prod.productName,
+        unit: prod.defaultUnit,
+      };
+      return updated;
+    });
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorBanner(null);
@@ -152,7 +194,7 @@ export const CreatePoModal: React.FC<CreatePoModalProps> = ({ isOpen, onClose, o
       return;
     }
 
-    if (!header.customerName || header.customerName.trim() === '') {
+    if (!selectedCustomerId || !header.customerName || header.customerName.trim() === '') {
       setErrorBanner('กรุณาเลือกลูกค้า');
       return;
     }
@@ -190,7 +232,7 @@ export const CreatePoModal: React.FC<CreatePoModalProps> = ({ isOpen, onClose, o
     setIsSubmitting(true);
 
     const mappedLines: CreateSalesOrderLineInput[] = lines.map((l) => ({
-      productCode: '',
+      productCode: l.productCode || '',
       productName: l.productName,
       orderedQty: l.orderedQty,
       unit: l.unit,
@@ -242,14 +284,6 @@ export const CreatePoModal: React.FC<CreatePoModalProps> = ({ isOpen, onClose, o
       reducedMotion={reducedMotion}
     >
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Master Data Empty Warning Banner */}
-        {isMasterDataEmpty && (
-          <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-lg flex items-center gap-2 text-xs font-semibold">
-            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-            <span>ยังไม่มีข้อมูลหลัก กรุณาเพิ่มข้อมูลลูกค้าหรือสินค้าก่อน</span>
-          </div>
-        )}
-
         {/* Error Banner */}
         <AnimatePresence>
           {errorBanner && (
@@ -281,11 +315,30 @@ export const CreatePoModal: React.FC<CreatePoModalProps> = ({ isOpen, onClose, o
               onChange={(e) => setHeader({ ...header, poNumber: e.target.value })}
             />
 
-            <Select
+            <Autocomplete
               label="ชื่อลูกค้า *"
-              value={header.customerName}
-              onChange={(e) => setHeader({ ...header, customerName: e.target.value })}
-              options={customerOptions}
+              placeholder="พิมพ์ค้นหารหัส หรือ ชื่อลูกค้า..."
+              value={customerDisplayText}
+              options={customerAutocompleteOptions}
+              onChange={(val) => {
+                setCustomerDisplayText(val);
+                // Check if user text exactly matches an option label or sublabel
+                const matched = activeCustomers.find(
+                  (c) => `${c.customerCode} - ${c.customerName}` === val || c.customerName === val
+                );
+                if (matched) {
+                  handleCustomerSelect({
+                    value: matched.customerId,
+                    label: `${matched.customerCode} - ${matched.customerName}`,
+                    data: matched,
+                  });
+                } else if (!val) {
+                  setSelectedCustomerId('');
+                  setHeader((prev) => ({ ...prev, customerName: '' }));
+                }
+              }}
+              onSelectOption={handleCustomerSelect}
+              emptyText="ไม่พบลูกค้าที่ตรงตามเงื่อนไข"
             />
 
             <div className="grid grid-cols-2 gap-2.5">
@@ -360,18 +413,32 @@ export const CreatePoModal: React.FC<CreatePoModalProps> = ({ isOpen, onClose, o
                     </button>
                   </div>
 
-                  <Select
-                    label="เลือกสินค้าจากข้อมูลหลัก"
-                    value=""
-                    onChange={(e) => handleSelectProduct(idx, e.target.value)}
-                    options={productOptions}
-                  />
-
-                  <Input
+                  <Autocomplete
                     label="ชื่อสินค้า *"
-                    placeholder="เช่น พายไก่ไข่เค็ม 120g"
+                    placeholder={
+                      !selectedCustomerId
+                        ? 'กรุณาเลือกลูกค้าก่อน'
+                        : customerProducts.length === 0
+                        ? 'ยังไม่มีรายการสินค้าของลูกค้านี้ กรุณาเพิ่มในข้อมูลหลักก่อน'
+                        : 'พิมพ์ค้นหา หรือ เลือกสินค้า...'
+                    }
+                    disabled={!selectedCustomerId}
                     value={line.productName}
-                    onChange={(e) => handleLineChange(idx, 'productName', e.target.value)}
+                    options={productAutocompleteOptions}
+                    onChange={(val) => handleLineChange(idx, 'productName', val)}
+                    onSelectOption={(opt) => handleProductSelect(idx, opt)}
+                    emptyText={
+                      !selectedCustomerId
+                        ? 'กรุณาเลือกลูกค้าก่อน'
+                        : customerProducts.length === 0
+                        ? 'ยังไม่มีรายการสินค้าของลูกค้านี้ กรุณาเพิ่มในข้อมูลหลักก่อน'
+                        : 'ไม่พบสินค้าของลูกค้านี้'
+                    }
+                    helperText={
+                      selectedCustomerId && customerProducts.length === 0
+                        ? 'ยังไม่มีรายการสินค้าของลูกค้านี้ กรุณาเพิ่มในข้อมูลหลักก่อน'
+                        : undefined
+                    }
                   />
 
                   <div className="grid grid-cols-12 gap-2 items-end">
@@ -410,4 +477,3 @@ export const CreatePoModal: React.FC<CreatePoModalProps> = ({ isOpen, onClose, o
     </Modal>
   );
 };
-
