@@ -165,7 +165,7 @@ export const OverviewDrilldownModal: React.FC<OverviewDrilldownModalProps> = ({
             </div>
           )
         ) : items.length === 0 ? (
-          <div className="p-8 text-center text-slate-500 text-sm">ไม่พบรายการสินค้าที่ตรงตามเงื่อนไข</div>
+          <div className="p-8 text-center text-slate-500 text-sm">ไม่พบข้อมูลตามตัวกรองที่เลือก</div>
         ) : (
           <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
             <table className="w-full text-left border-collapse text-xs">

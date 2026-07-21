@@ -9,7 +9,7 @@ interface AppShellProps {
 }
 
 export const AppShell: React.FC<AppShellProps> = ({ children }) => {
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
 
   const toggleSidebar = () => {
     setIsSidebarCollapsed((prev) => !prev);
@@ -57,7 +57,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
         </header>
 
         {/* Dynamic Route View Content Container */}
-        <main className="flex-1 overflow-y-auto p-6 max-w-[1440px] w-full mx-auto">
+        <main className="flex-1 overflow-y-auto px-3.5 sm:px-5 py-3 sm:py-4 w-full max-w-none">
           <ErrorBoundary>{children}</ErrorBoundary>
         </main>
       </div>

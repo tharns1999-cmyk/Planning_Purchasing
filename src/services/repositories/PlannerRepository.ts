@@ -129,6 +129,24 @@ export interface UpdateWipPrepItemInput {
   note?: string;
 }
 
+export interface CreateWipItemInput {
+  itemCode?: string;
+  itemName: string;
+  defaultUnit: string;
+  relatedProduct?: string;
+  note?: string;
+}
+
+export interface UpdateWipItemInput {
+  itemCode?: string;
+  itemName?: string;
+  defaultUnit?: string;
+  relatedProduct?: string;
+  note?: string;
+  active?: boolean;
+}
+
+
 export interface CreateWipPrepItemResult {
   success: boolean;
   item?: WipPrepItem;
@@ -573,6 +591,16 @@ export interface PlannerRepository {
   /**
    * Customer Master Data Methods
    */
+  listWipPrepItems(includeInactive?: boolean): WipPrepItem[];
+  listWipItems(includeInactive?: boolean): WipPrepItem[];
+  getWipPrepItem(itemId: string): WipPrepItem | null;
+  getWipItem(itemId: string): WipPrepItem | null;
+  createWipPrepItem(input: CreateWipPrepItemInput): CreateWipPrepItemResult;
+  createWipItem(input: CreateWipItemInput): CreateWipPrepItemResult;
+  updateWipPrepItem(itemId: string, input: UpdateWipPrepItemInput): UpdateWipPrepItemResult;
+  updateWipItem(itemId: string, input: UpdateWipItemInput): UpdateWipPrepItemResult;
+  setWipPrepItemActive(itemId: string, active: boolean): boolean;
+  setWipItemActive(itemId: string, active: boolean): boolean;
   listCustomers(includeInactive?: boolean): CustomerMaster[];
   createCustomer(input: CreateCustomerInput): CreateCustomerResult;
   updateCustomer(customerId: string, input: UpdateCustomerInput): UpdateCustomerResult;

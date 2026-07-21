@@ -22,14 +22,14 @@ describe('Phase 3B — Planning Queue UI Read-Only Tests', () => {
 
     expect(screen.getByText('รายการรอวางแผน (Queue)')).toBeInTheDocument();
     expect(screen.getByText(/สินค้า FG/)).toBeInTheDocument();
-    expect(screen.getByText(/WIP \/ งานเตรียม/)).toBeInTheDocument();
+    expect(screen.getByText(/WIP งานแปรรูป/)).toBeInTheDocument();
 
     // Verify seed FG item names are rendered
     expect(screen.getByText('พายไก่ไข่เค็ม 120g')).toBeInTheDocument();
     expect(screen.getByText('ขนมปังเนยสด 200g')).toBeInTheDocument();
   });
 
-  it('2. Switches tabs to display WIP / งานเตรียม items', () => {
+  it('2. Switches tabs to display WIP งานแปรรูป items', () => {
     const queueData = plannerRepository.getPlanningQueueData('2026-07-20');
 
     render(
@@ -39,10 +39,10 @@ describe('Phase 3B — Planning Queue UI Read-Only Tests', () => {
       />
     );
 
-    const wipTabBtn = screen.getByText(/WIP \/ งานเตรียม/);
+    const wipTabBtn = screen.getByText(/WIP งานแปรรูป/);
     fireEvent.click(wipTabBtn);
 
-    // Verify seed WIP/Prep item names are rendered
+    // Verify seed WIP item names are rendered
     expect(screen.getByText('ไก่ผัดไส้พายหมักเครื่องเทศ (WIP)')).toBeInTheDocument();
     expect(screen.getByText('แป้งพายชั้นหมักเนยสด (WIP)')).toBeInTheDocument();
   });

@@ -185,9 +185,9 @@ export const SettingsPage: React.FC = () => {
 
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto pb-12">
+    <div className="w-full space-y-4 pb-6">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200/80 pb-3">
         <div>
           <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
             <Database className="w-6 h-6 text-sky-600" />

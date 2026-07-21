@@ -6,6 +6,8 @@ import {
   CreateSalesOrderResult,
   CreateWipPrepItemInput,
   UpdateWipPrepItemInput,
+  CreateWipItemInput,
+  UpdateWipItemInput,
   CreateWipPrepItemResult,
   UpdateWipPrepItemResult,
   CreateDraftPlanResult,
@@ -398,13 +400,22 @@ export class LocalStorageRepository implements PlannerRepository {
 
     const snapshot = this.getSnapshot();
 
-    if (input.itemCode && input.itemCode.trim() !== '') {
-      const cleanCode = input.itemCode.trim().toLowerCase();
+    let finalItemCode = input.itemCode?.trim();
+    if (!finalItemCode) {
+      let count = snapshot.entities.wipPrepItems.length + 1;
+      let candidate = `WIP-${count.toString().padStart(4, '0')}`;
+      while (snapshot.entities.wipPrepItems.some((i) => i.itemCode && i.itemCode.toLowerCase() === candidate.toLowerCase())) {
+        count++;
+        candidate = `WIP-${count.toString().padStart(4, '0')}`;
+      }
+      finalItemCode = candidate;
+    } else {
+      const cleanCode = finalItemCode.toLowerCase();
       const duplicate = snapshot.entities.wipPrepItems.some(
         (existing) => existing.itemCode && existing.itemCode.trim().toLowerCase() === cleanCode
       );
       if (duplicate) {
-        errors.push(`itemCode '${input.itemCode.trim()}' already exists (must be unique)`);
+        errors.push(`itemCode '${finalItemCode}' already exists (must be unique)`);
       }
     }
 
@@ -418,7 +429,7 @@ export class LocalStorageRepository implements PlannerRepository {
     const createdItem: WipPrepItem = {
       itemId: newItemId,
       itemType: input.itemType,
-      itemCode: input.itemCode?.trim() || undefined,
+      itemCode: finalItemCode,
       itemName: input.itemName.trim(),
       defaultUnit: input.defaultUnit.trim(),
       relatedProduct: input.relatedProduct?.trim() || undefined,
@@ -514,6 +525,47 @@ export class LocalStorageRepository implements PlannerRepository {
 
     localStorage.setItem(this.storageKey, JSON.stringify(snapshot));
     return true;
+  }
+
+  public listWipItems(includeInactive: boolean = false): WipPrepItem[] {
+    const snapshot = this.getSnapshot();
+    return snapshot.entities.wipPrepItems.filter(
+      (item) => item.itemType === SourceType.WIP && (includeInactive || item.active)
+    );
+  }
+
+  public getWipItem(itemId: string): WipPrepItem | null {
+    const item = this.getWipPrepItem(itemId);
+    if (item && item.itemType === SourceType.WIP) {
+      return item;
+    }
+    return null;
+  }
+
+  public createWipItem(input: CreateWipItemInput): CreateWipPrepItemResult {
+    return this.createWipPrepItem({
+      ...input,
+      itemType: SourceType.WIP,
+    });
+  }
+
+  public updateWipItem(itemId: string, input: UpdateWipItemInput): UpdateWipPrepItemResult {
+    const { active, ...updateInput } = input;
+    const res = this.updateWipPrepItem(itemId, {
+      ...updateInput,
+      itemType: SourceType.WIP,
+    });
+    if (res.success && active !== undefined) {
+      this.setWipPrepItemActive(itemId, active);
+      if (res.item) {
+        res.item.active = active;
+      }
+    }
+    return res;
+  }
+
+  public setWipItemActive(itemId: string, active: boolean): boolean {
+    return this.setWipPrepItemActive(itemId, active);
   }
 
   public listWeekPlans(weekStart: string): WeeklyPlan[] {
@@ -1282,7 +1334,7 @@ export class LocalStorageRepository implements PlannerRepository {
         return a.dueDate.localeCompare(b.dueDate);
       });
 
-    const wipPrepItems = snapshot.entities.wipPrepItems.filter((item) => item.active);
+    const wipPrepItems = snapshot.entities.wipPrepItems.filter((item) => item.active && item.itemType === SourceType.WIP);
 
     return {
       fgItems,

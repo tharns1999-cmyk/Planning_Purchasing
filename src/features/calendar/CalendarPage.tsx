@@ -223,9 +223,9 @@ export const CalendarPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="w-full space-y-4">
       {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200/80 pb-5">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-200/80 pb-3">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight leading-snug">
             ปฏิทินส่งสินค้า (Delivery Calendar)
@@ -237,7 +237,7 @@ export const CalendarPage: React.FC = () => {
       </div>
 
       {/* Week Navigation Toolbar */}
-      <div className="p-4 bg-white rounded-xl border border-slate-200/90 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="p-3 bg-white rounded-xl border border-slate-200/90 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="p-2.5 bg-sky-50 text-sky-700 rounded-lg shrink-0">
             <Truck className="w-5 h-5" />

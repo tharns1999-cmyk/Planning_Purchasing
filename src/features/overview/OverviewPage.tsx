@@ -63,7 +63,7 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ referenceDate }) => 
 
   if (isLoading) {
     return (
-      <div className="p-6 md:p-8 max-w-7xl mx-auto min-h-[500px] flex items-center justify-center">
+      <div className="w-full min-h-[400px] flex items-center justify-center">
         <LoadingState message="กำลังโหลดข้อมูลภาพรวมการผลิต..." />
       </div>
     );
@@ -71,7 +71,7 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ referenceDate }) => 
 
   if (error || !summary || !overviewModel) {
     return (
-      <div className="p-6 md:p-8 max-w-7xl mx-auto">
+      <div className="w-full">
         <ErrorState
           title="เกิดข้อผิดพลาดในการโหลดภาพรวม"
           message={error || 'ไม่พบข้อมูลสรุปภาพรวม'}
@@ -106,14 +106,14 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ referenceDate }) => 
 
   return (
     <motion.div
-      className="p-6 md:p-8 max-w-7xl mx-auto space-y-6"
+      className="w-full space-y-4"
       initial="initial"
       animate="animate"
       exit="exit"
       variants={activeVariants}
     >
       {/* Top Bar Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200/80 pb-3">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight leading-snug">
             ภาพรวมการผลิตรายสัปดาห์
@@ -148,8 +148,8 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ referenceDate }) => 
             </div>
           </div>
           <div>
-            <div className="text-2xl font-bold text-slate-900 tracking-tight">{overviewModel.activePoCount}</div>
-            <div className="text-xs text-slate-500 mt-0.5">ใบสั่งซื้อในระบบ</div>
+            <div className="text-2xl font-bold text-slate-900 tracking-tight">{overviewModel.allLines.length}</div>
+            <div className="text-xs text-slate-500 mt-0.5">รายการสั่งซื้อในระบบ</div>
             <span className="text-[10px] text-sky-600 font-semibold block mt-1">กดเพื่อดูรายละเอียด →</span>
           </div>
         </div>

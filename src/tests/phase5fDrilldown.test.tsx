@@ -100,8 +100,11 @@ describe('BUG FIX — DRILLDOWN DATA ACCURACY & DEFAULT FILTERS TESTS', () => {
     const prioritySelect = screen.getByDisplayValue('ความด่วน: ทั้งหมด') as HTMLSelectElement;
     expect(prioritySelect).toBeInTheDocument();
 
-    const statusSelect = screen.getByDisplayValue('สถานะ: ทั้งหมด') as HTMLSelectElement;
+    const statusSelect = screen.getByDisplayValue('วางแผน: ทั้งหมด') as HTMLSelectElement;
     expect(statusSelect).toBeInTheDocument();
+
+    const dueStatusSelect = screen.getByDisplayValue('กำหนดส่ง: ทั้งหมด') as HTMLSelectElement;
+    expect(dueStatusSelect).toBeInTheDocument();
   });
 
   it('5. Sales Orders Page: Clicking Summary Card changes filter and "ล้างตัวกรอง" resets to default', async () => {
@@ -120,21 +123,38 @@ describe('BUG FIX — DRILLDOWN DATA ACCURACY & DEFAULT FILTERS TESTS', () => {
     fireEvent.click(urgentCard!);
 
     expect(screen.getByDisplayValue('ความด่วน: ด่วน')).toBeInTheDocument();
+    expect(screen.getByText(/กำลังดู: รายการด่วน/)).toBeInTheDocument();
 
     // Click Clear Filters
-    const clearBtns = screen.getAllByRole('button', { name: /ล้างตัวกรอง/i });
-    expect(clearBtns.length).toBeGreaterThan(0);
-    const firstClearBtn = clearBtns[0];
-    expect(firstClearBtn).toBeDefined();
-    fireEvent.click(firstClearBtn!);
-
-
+    const clearBtn = screen.getByRole('button', { name: /ล้างตัวกรอง/i });
+    expect(clearBtn).toBeInTheDocument();
+    fireEvent.click(clearBtn);
 
     expect(screen.getByDisplayValue('ความด่วน: ทั้งหมด')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('สถานะ: ทั้งหมด')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('วางแผน: ทั้งหมด')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('กำหนดส่ง: ทั้งหมด')).toBeInTheDocument();
   });
 
-  it('6. PO Detail Modal: Shows only line items & allocations of the selected PO', async () => {
+  it('6. Sales Orders Page: Shows empty state "ไม่พบข้อมูลตามตัวกรองที่เลือก" when no items match', async () => {
+    render(
+      <MemoryRouter>
+        <OrdersPage />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('ใบสั่งซื้อ (Sales Orders)')).toBeInTheDocument();
+    });
+
+    const searchInput = screen.getByPlaceholderText('ค้นหา PO/ลูกค้า/สินค้า');
+    fireEvent.change(searchInput, { target: { value: 'NON_EXISTENT_SEARCH_STRING_9999' } });
+
+    await waitFor(() => {
+      expect(screen.getByText('ไม่พบข้อมูลตามตัวกรองที่เลือก')).toBeInTheDocument();
+    });
+  });
+
+  it('7. PO Detail Modal: Shows only line items & allocations of the selected PO', async () => {
     render(
       <MemoryRouter>
         <OrdersPage />

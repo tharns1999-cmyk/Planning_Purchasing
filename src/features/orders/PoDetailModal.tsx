@@ -159,9 +159,11 @@ export const PoDetailModal: React.FC<PoDetailModalProps> = ({ isOpen, onClose, o
                   const remainingQty = calculateRemainingQty(line.orderedQty, line.cancelledQty, activePlannedQty);
                   const dueStatus = getDueStatus(line.dueDate, remainingQty);
 
-                  // Find allocations for this line in active plan
-                  const lineAllocations = activePlan
-                    ? activePlan.allocations.filter((a) => a.salesOrderLineId === line.id && a.sourceType === SourceType.FG)
+                  // Find allocations for this line in active plan (strictly filtered by this PO's line ID & FG source type)
+                  const lineAllocations = activePlan && line.id
+                    ? activePlan.allocations.filter(
+                        (a) => a.salesOrderLineId === line.id && a.sourceType === SourceType.FG
+                      )
                     : [];
 
                   return (

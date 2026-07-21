@@ -77,7 +77,7 @@ describe('Phase 2B.1 — Sales Orders Read-Only Page Tests', () => {
     const searchInput = screen.getByPlaceholderText('ค้นหา PO/ลูกค้า/สินค้า');
     fireEvent.change(searchInput, { target: { value: 'NONEXISTENT_PO_999' } });
 
-    expect(screen.getByText('ไม่พบรายการใบสั่งซื้อ')).toBeInTheDocument();
+    expect(screen.getByText('ไม่พบข้อมูลตามตัวกรองที่เลือก')).toBeInTheDocument();
     expect(screen.getByText('ไม่พบข้อมูล PO ที่ตรงกับคำค้นหาหรือตัวกรองที่เลือกไว้')).toBeInTheDocument();
   });
 

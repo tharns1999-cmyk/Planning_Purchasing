@@ -8,7 +8,7 @@ import { Select } from '@/components/common/Select';
 import { Textarea } from '@/components/common/Textarea';
 import { Badge } from '@/components/common/Badge';
 import { PlanningQueueFgItem } from '@/services/repositories/PlannerRepository';
-import { WipPrepItem, SourceType } from '@/domain/types';
+import { WipPrepItem } from '@/domain/types';
 
 export interface DragTarget {
   productionDate: string;
@@ -262,11 +262,7 @@ export const AllocationModal: React.FC<AllocationModalProps> = ({
                 <Tag className="w-4 h-4 text-sky-600" />
                 {wipPrepItem.itemName}
               </div>
-              {wipPrepItem.itemType === SourceType.WIP ? (
-                <Badge variant="sky" label="WIP (งานแปรรูป)" />
-              ) : (
-                <Badge variant="amber" label="PREP (งานเตรียม)" />
-              )}
+              <Badge variant="sky" label="WIP (งานแปรรูป)" />
             </div>
 
             <div className="text-slate-600">

@@ -192,9 +192,9 @@ export const PrintPreviewPage: React.FC = () => {
   const isDraft = selectedPlan?.status === PlanStatus.DRAFT;
 
   return (
-    <div className="space-y-6">
+    <div className="w-full space-y-4">
       {/* Top Toolbar (Screen View Only - Hidden on Print) */}
-      <div className="no-print print-toolbar p-4 bg-white rounded-xl border border-slate-200 shadow-sm space-y-3">
+      <div className="no-print print-toolbar p-3 bg-white rounded-xl border border-slate-200 shadow-sm space-y-3">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           {/* Left: Back button & Title */}
           <div className="flex items-center gap-3">

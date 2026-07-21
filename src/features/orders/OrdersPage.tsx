@@ -45,6 +45,7 @@ export const OrdersPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [priorityFilter, setPriorityFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
+  const [dueStatusFilter, setDueStatusFilter] = useState<string>('ALL');
 
   // Expanded PO cards state
   const [expandedOrderIds, setExpandedOrderIds] = useState<Set<string>>(new Set());
@@ -56,6 +57,12 @@ export const OrdersPage: React.FC = () => {
   // Notice toast state
   const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
 
+  const resetFilters = useCallback(() => {
+    setSearchQuery('');
+    setPriorityFilter('ALL');
+    setStatusFilter('ALL');
+    setDueStatusFilter('ALL');
+  }, []);
 
   const loadOrdersData = useCallback(() => {
     setIsLoading(true);
@@ -153,9 +160,20 @@ export const OrdersPage: React.FC = () => {
         if (d.totalRemainingQty > 0) return false;
       }
 
+      // 4. Due Status Filter
+      if (dueStatusFilter !== 'ALL') {
+        const hasMatchingDueStatus = d.lines.some((l) => {
+          const activePlannedQty = calculateActivePlannedQtyForLine(l.id, snapshotPlans);
+          const remainingQty = calculateRemainingQty(l.orderedQty, l.cancelledQty, activePlannedQty);
+          const dueStatus = getDueStatus(l.dueDate, remainingQty);
+          return dueStatus === dueStatusFilter;
+        });
+        if (!hasMatchingDueStatus) return false;
+      }
+
       return true;
     });
-  }, [ordersDetail, searchQuery, priorityFilter, statusFilter]);
+  }, [ordersDetail, searchQuery, priorityFilter, statusFilter, dueStatusFilter, snapshotPlans]);
 
   // Summary Metrics calculations
   const metrics = useMemo(() => {
@@ -170,10 +188,10 @@ export const OrdersPage: React.FC = () => {
         const activePlanned = calculateActivePlannedQtyForLine(l.id, snapshotPlans);
         const remaining = calculateRemainingQty(l.orderedQty, l.cancelledQty, activePlanned);
 
-        if (l.priority === Priority.URGENT && remaining > 0) {
+        if (l.priority === Priority.URGENT) {
           urgentLinesCount++;
         }
-        if (activePlanned === 0) {
+        if (remaining > 0) {
           unplannedLinesCount++;
         }
       });
@@ -189,7 +207,7 @@ export const OrdersPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="p-6 md:p-8 max-w-7xl mx-auto min-h-[500px] flex items-center justify-center">
+      <div className="w-full min-h-[400px] flex items-center justify-center">
         <LoadingState message="กำลังโหลดข้อมูลใบสั่งซื้อ..." />
       </div>
     );
@@ -197,7 +215,7 @@ export const OrdersPage: React.FC = () => {
 
   if (error) {
     return (
-      <div className="p-6 md:p-8 max-w-7xl mx-auto">
+      <div className="w-full">
         <ErrorState title="เกิดข้อผิดพลาด" message={error} onRetry={loadOrdersData} />
       </div>
     );
@@ -220,9 +238,12 @@ export const OrdersPage: React.FC = () => {
     }
   };
 
+  const isFilterActive =
+    searchQuery !== '' || priorityFilter !== 'ALL' || statusFilter !== 'ALL' || dueStatusFilter !== 'ALL';
+
   return (
     <motion.div
-      className="p-6 md:p-8 max-w-7xl mx-auto space-y-6"
+      className="w-full space-y-4"
       initial="initial"
       animate="animate"
       exit="exit"
@@ -235,7 +256,7 @@ export const OrdersPage: React.FC = () => {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl flex items-center justify-between shadow-sm"
+            className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl flex items-center justify-between shadow-sm"
           >
             <div className="flex items-center gap-2.5">
               <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
@@ -252,7 +273,7 @@ export const OrdersPage: React.FC = () => {
       </AnimatePresence>
 
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200/80 pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200/80 pb-3">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight leading-snug">
             ใบสั่งซื้อ (Sales Orders)
@@ -284,10 +305,7 @@ export const OrdersPage: React.FC = () => {
       {/* 4 Summary KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div
-          onClick={() => {
-            setPriorityFilter('ALL');
-            setStatusFilter('ALL');
-          }}
+          onClick={resetFilters}
           className="p-4 bg-white rounded-xl border border-slate-200/90 shadow-2xs flex items-center gap-3.5 cursor-pointer hover:border-sky-400 hover:shadow-md transition-all active:scale-[0.99]"
         >
           <div className="w-10 h-10 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center shrink-0">
@@ -301,10 +319,7 @@ export const OrdersPage: React.FC = () => {
         </div>
 
         <div
-          onClick={() => {
-            setPriorityFilter('ALL');
-            setStatusFilter('ALL');
-          }}
+          onClick={resetFilters}
           className="p-4 bg-white rounded-xl border border-slate-200/90 shadow-2xs flex items-center gap-3.5 cursor-pointer hover:border-indigo-400 hover:shadow-md transition-all active:scale-[0.99]"
         >
           <div className="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
@@ -321,6 +336,7 @@ export const OrdersPage: React.FC = () => {
           onClick={() => {
             setPriorityFilter('URGENT');
             setStatusFilter('ALL');
+            setDueStatusFilter('ALL');
           }}
           className="p-4 bg-white rounded-xl border border-slate-200/90 shadow-2xs flex items-center gap-3.5 cursor-pointer hover:border-rose-400 hover:shadow-md transition-all active:scale-[0.99]"
         >
@@ -338,6 +354,7 @@ export const OrdersPage: React.FC = () => {
           onClick={() => {
             setPriorityFilter('ALL');
             setStatusFilter('UNPLANNED');
+            setDueStatusFilter('ALL');
           }}
           className="p-4 bg-white rounded-xl border border-slate-200/90 shadow-2xs flex items-center gap-3.5 cursor-pointer hover:border-amber-400 hover:shadow-md transition-all active:scale-[0.99]"
         >
@@ -366,24 +383,29 @@ export const OrdersPage: React.FC = () => {
 
         {/* Filters & Active Indicator */}
         <div className="flex flex-wrap items-center gap-3">
-          {(searchQuery !== '' || priorityFilter !== 'ALL' || statusFilter !== 'ALL') && (
+          {isFilterActive && (
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold text-sky-700 bg-sky-50 border border-sky-200 px-2.5 py-1 rounded-lg">
-                กำลังดู: {priorityFilter === 'URGENT' ? 'รายการด่วน' : statusFilter === 'UNPLANNED' ? 'ยังไม่วางแผน' : 'ผลการกรอง'}
+                กำลังดู: {
+                  priorityFilter === 'URGENT'
+                    ? 'รายการด่วน'
+                    : statusFilter === 'UNPLANNED'
+                    ? 'ยังไม่วางแผน'
+                    : dueStatusFilter !== 'ALL'
+                    ? 'ตามกำหนดส่ง'
+                    : searchQuery !== ''
+                    ? `ค้นหา "${searchQuery}"`
+                    : 'ผลการกรอง'
+                }
               </span>
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => {
-                  setSearchQuery('');
-                  setPriorityFilter('ALL');
-                  setStatusFilter('ALL');
-                }}
+                onClick={resetFilters}
                 leftIcon={<X className="w-3.5 h-3.5" />}
               >
                 ล้างตัวกรอง
               </Button>
-
             </div>
           )}
 
@@ -406,10 +428,25 @@ export const OrdersPage: React.FC = () => {
               onChange={(e) => setStatusFilter(e.target.value)}
               leftIcon={<Filter className="w-3.5 h-3.5 text-slate-400" />}
               options={[
-                { value: 'ALL', label: 'สถานะ: ทั้งหมด' },
+                { value: 'ALL', label: 'วางแผน: ทั้งหมด' },
                 { value: 'UNPLANNED', label: 'ยังไม่วางแผน' },
                 { value: 'PARTIAL', label: 'วางแผนบางส่วน' },
                 { value: 'FULLY', label: 'วางแผนครบแล้ว' },
+              ]}
+            />
+          </div>
+
+          <div className="w-44">
+            <Select
+              value={dueStatusFilter}
+              onChange={(e) => setDueStatusFilter(e.target.value)}
+              leftIcon={<Filter className="w-3.5 h-3.5 text-slate-400" />}
+              options={[
+                { value: 'ALL', label: 'กำหนดส่ง: ทั้งหมด' },
+                { value: DueStatus.OVERDUE, label: 'เกินกำหนดส่ง' },
+                { value: DueStatus.DUE_SOON, label: 'ใกล้ถึงกำหนด' },
+                { value: DueStatus.UPCOMING, label: 'ตามแผนปกติ' },
+                { value: DueStatus.PLANNED_COMPLETE, label: 'วางแผนครบแล้ว' },
               ]}
             />
           </div>
@@ -419,15 +456,11 @@ export const OrdersPage: React.FC = () => {
       {/* PO Grouped List */}
       {filteredOrders.length === 0 ? (
         <EmptyState
-          title="ไม่พบรายการใบสั่งซื้อ"
+          title="ไม่พบข้อมูลตามตัวกรองที่เลือก"
           message="ไม่พบข้อมูล PO ที่ตรงกับคำค้นหาหรือตัวกรองที่เลือกไว้"
           icon={<FileText className="w-6 h-6" />}
           actionLabel="ล้างตัวกรอง"
-          onAction={() => {
-            setSearchQuery('');
-            setPriorityFilter('ALL');
-            setStatusFilter('ALL');
-          }}
+          onAction={resetFilters}
         />
       ) : (
 

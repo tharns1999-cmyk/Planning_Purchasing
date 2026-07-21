@@ -570,7 +570,7 @@ export const PlanningPage: React.FC = () => {
       } else if (alloc.wipPrepItemId) {
         const item = snap.entities.wipPrepItems.find((i) => i.itemId === alloc.wipPrepItemId);
         return {
-          displayName: item?.itemName || 'WIP / งานเตรียม',
+          displayName: item?.itemName || 'WIP งานแปรรูป',
           poNumber: '',
         };
       }
@@ -600,7 +600,7 @@ export const PlanningPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="p-6 md:p-8 max-w-7xl mx-auto min-h-[500px] flex items-center justify-center">
+      <div className="w-full min-h-[400px] flex items-center justify-center">
         <LoadingState message="กำลังโหลดกระดานวางแผนการผลิต..." />
       </div>
     );
@@ -608,7 +608,7 @@ export const PlanningPage: React.FC = () => {
 
   if (error && !boardData) {
     return (
-      <div className="p-6 md:p-8 max-w-7xl mx-auto">
+      <div className="w-full">
         <ErrorState title="เกิดข้อผิดพลาดในการโหลด" message={error} onRetry={loadPageData} />
       </div>
     );
@@ -618,7 +618,7 @@ export const PlanningPage: React.FC = () => {
 
   return (
     <motion.div
-      className="p-6 md:p-8 max-w-7xl mx-auto space-y-6"
+      className="w-full space-y-3.5"
       initial="initial"
       animate="animate"
       exit="exit"
@@ -631,7 +631,7 @@ export const PlanningPage: React.FC = () => {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl flex items-center justify-between shadow-sm"
+            className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl flex items-center justify-between shadow-sm"
           >
             <div className="flex items-center gap-2.5">
               <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
@@ -648,7 +648,7 @@ export const PlanningPage: React.FC = () => {
       </AnimatePresence>
 
       {/* Header Page Title & Subtitle */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200/80 pb-5">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-200/80 pb-3">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight leading-snug">
             วางแผนการผลิต (Weekly Planning Board)
@@ -670,11 +670,11 @@ export const PlanningPage: React.FC = () => {
       </div>
 
       {/* Week Navigation Toolbar & Controls */}
-      <div className="p-4 bg-white rounded-xl border border-slate-200/90 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="p-3 bg-white rounded-xl border border-slate-200/90 shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-3">
         {/* Week Title & Date Range */}
         <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-sky-50 text-sky-700 rounded-lg shrink-0">
-            <Calendar className="w-5 h-5" />
+          <div className="p-2 bg-sky-50 text-sky-700 rounded-lg shrink-0">
+            <Calendar className="w-4 h-4" />
           </div>
           <div>
             <div className="text-xs text-slate-500 font-medium">ประจำสัปดาห์</div>
@@ -685,7 +685,7 @@ export const PlanningPage: React.FC = () => {
         </div>
 
         {/* Navigation Buttons & Date Picker */}
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -713,7 +713,7 @@ export const PlanningPage: React.FC = () => {
             สัปดาห์ถัดไป
           </Button>
 
-          <div className="w-40">
+          <div className="w-36">
             <Input
               type="date"
               value={currentWeek.weekStart}
@@ -725,7 +725,7 @@ export const PlanningPage: React.FC = () => {
       </div>
 
       {/* Revision Selector & Lifecycle Actions Bar */}
-      <div className="p-4 bg-white rounded-xl border border-slate-200/90 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="p-3 bg-white rounded-xl border border-slate-200/90 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         {/* Left: Revision Selector & Status Badge */}
         <div className="flex items-center gap-3 flex-wrap">
           <span className="text-xs font-semibold text-slate-500">ฉบับแผน:</span>
@@ -836,33 +836,34 @@ export const PlanningPage: React.FC = () => {
         </div>
       </div>
 
-      {/* 2-Column Grid Layout: Queue (Left) + Board Grid (Right) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Column: Planning Queue Panel */}
-        <div className="lg:col-span-4">
+      {/* 2-Column Responsive Flex Layout: Queue Panel (Balanced ~290px width) + Expanded Board Grid */}
+      <div className="flex flex-col lg:flex-row gap-4 items-start w-full">
+        {/* Left Column: Planning Queue Panel (Balanced width 280–300px) */}
+        <div className="w-full lg:w-[290px] lg:shrink-0">
           <PlanningQueuePanel
             fgItems={queueData?.fgItems || []}
             wipPrepItems={queueData?.wipPrepItems || []}
             reducedMotion={reducedMotion}
+            onRefresh={loadPageData}
           />
         </div>
 
-        {/* Right Column: Board Grid Table */}
-        <div className="lg:col-span-8 bg-white rounded-xl border border-slate-200/90 shadow-2xs overflow-hidden">
+        {/* Right Column: Board Grid Table (takes remaining width) */}
+        <div className="flex-1 min-w-0 bg-white rounded-xl border border-slate-200/90 shadow-2xs overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-700 font-semibold">
-                  <th className="py-3 px-3 w-36 border-r border-slate-200">
+                  <th className="py-3 px-3 w-32 border-r border-slate-200 shrink-0">
                     <div className="flex items-center gap-1.5">
                       <Calendar className="w-4 h-4 text-slate-500" />
-                      <span>วันที่ / ห้องผลิต</span>
+                      <span className="text-xs sm:text-sm font-bold">วันที่ / ห้องผลิต</span>
                     </div>
                   </th>
                   {FIXED_ROOMS.map((room) => (
-                    <th key={room.id} className="py-3 px-3 text-center border-r border-slate-200 last:border-r-0">
-                      <div className="font-bold text-slate-900">{room.id} - {room.name}</div>
-                      <div className="text-[10px] text-slate-400 font-normal truncate max-w-[110px] mx-auto">{room.description}</div>
+                    <th key={room.id} className="py-3 px-2 text-center border-r border-slate-200 last:border-r-0 w-1/4">
+                      <div className="font-bold text-slate-900 text-xs sm:text-sm truncate">{room.id} - {room.name}</div>
+                      <div className="text-[11px] text-slate-400 font-normal truncate max-w-[200px] mx-auto">{room.description}</div>
                     </th>
                   ))}
                 </tr>
@@ -874,8 +875,8 @@ export const PlanningPage: React.FC = () => {
                     <tr key={dayIso} className="hover:bg-slate-50/50 transition-colors">
                       {/* Day Column */}
                       <td className="py-3.5 px-3 font-semibold text-slate-900 border-r border-slate-200 bg-slate-50/30">
-                        <div className="text-xs font-bold text-slate-900">{dayName}</div>
-                        <div className="text-[11px] text-slate-500 font-normal mt-0.5">{formattedDate}</div>
+                        <div className="text-xs sm:text-sm font-bold text-slate-900">{dayName}</div>
+                        <div className="text-xs text-slate-500 font-medium mt-0.5">{formattedDate}</div>
                       </td>
 
                       {/* 4 Room Columns (Droppable Cells) */}
@@ -985,7 +986,7 @@ export const PlanningPage: React.FC = () => {
                                       }`}
                                     >
                                       <div className="flex items-start justify-between gap-1">
-                                        <span className="font-bold text-slate-900 text-xs leading-tight line-clamp-1">
+                                        <span className="font-bold text-slate-900 text-xs sm:text-sm leading-tight line-clamp-1">
                                           {displayName}
                                         </span>
                                         <div className="flex items-center gap-1 shrink-0">
@@ -1025,22 +1026,22 @@ export const PlanningPage: React.FC = () => {
 
                                       {isFg ? (
                                         <>
-                                          <div className="text-[11px] text-slate-700 font-medium">
-                                            ผลิต: <strong>{alloc.plannedQty} {alloc.plannedUnit || alloc.unit}</strong>
+                                          <div className="text-xs text-slate-700 font-medium">
+                                            ผลิต: <strong className="font-bold text-slate-900">{alloc.plannedQty} {alloc.plannedUnit || alloc.unit}</strong>
                                           </div>
-                                          <div className="text-[11px] text-emerald-700 font-bold">
-                                            ได้ FG: <strong>{alloc.fgOutputQty ?? alloc.plannedQty} {alloc.fgOutputUnit || alloc.unit}</strong>
+                                          <div className="text-xs text-emerald-700 font-bold">
+                                            ได้ FG: <strong className="font-extrabold">{alloc.fgOutputQty ?? alloc.plannedQty} {alloc.fgOutputUnit || alloc.unit}</strong>
                                           </div>
                                           {poNumber && (
-                                            <div className="text-[10px] text-slate-400 flex items-center gap-1">
+                                            <div className="text-[11px] text-slate-400 flex items-center gap-1">
                                               <FileText className="w-3 h-3" />
                                               {poNumber}
                                             </div>
                                           )}
                                         </>
                                       ) : (
-                                        <div className="text-[11px] text-slate-700 font-medium">
-                                          วางแผน: <strong>{alloc.plannedQty} {alloc.plannedUnit || alloc.unit}</strong>
+                                        <div className="text-xs text-indigo-700 font-medium">
+                                          วางแผน: <strong className="font-bold text-indigo-950">{alloc.plannedQty} {alloc.plannedUnit || alloc.unit}</strong>
                                         </div>
                                       )}
 

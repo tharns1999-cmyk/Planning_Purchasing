@@ -167,7 +167,7 @@ export const ActualsPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="p-6 md:p-8 max-w-7xl mx-auto min-h-[500px] flex items-center justify-center">
+      <div className="w-full min-h-[400px] flex items-center justify-center">
         <LoadingState message="กำลังโหลดข้อมูลผลการผลิตจริง..." />
       </div>
     );
@@ -175,7 +175,7 @@ export const ActualsPage: React.FC = () => {
 
   if (error && !weekData) {
     return (
-      <div className="p-6 md:p-8 max-w-7xl mx-auto">
+      <div className="w-full">
         <ErrorState title="เกิดข้อผิดพลาดในการโหลด" message={error} onRetry={loadPageData} />
       </div>
     );
@@ -183,7 +183,7 @@ export const ActualsPage: React.FC = () => {
 
   return (
     <motion.div
-      className="p-6 md:p-8 max-w-7xl mx-auto space-y-6"
+      className="w-full space-y-4"
       initial="initial"
       animate="animate"
       exit="exit"
@@ -196,7 +196,7 @@ export const ActualsPage: React.FC = () => {
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl flex items-center justify-between shadow-sm"
+            className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl flex items-center justify-between shadow-sm"
           >
             <div className="flex items-center gap-2.5">
               <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
@@ -213,7 +213,7 @@ export const ActualsPage: React.FC = () => {
       </AnimatePresence>
 
       {/* Header Title & Subtitle */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200/80 pb-5">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-200/80 pb-3">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight leading-snug">
             ผลการผลิตจริง (Production Actuals)
