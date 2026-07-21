@@ -64,3 +64,14 @@ npm run build
 
 - ระบบในเวอร์ชันนี้เป็น **LocalStorage Prototype (v1.2 Freeze Baseline)** ข้อมูลทั้งหมดถูกจัดเก็บใน `localStorage` ของเบราว์เซอร์
 - ยังไม่ได้เชื่อมต่อกับ **Google Sheets API / Backend Database** (มีกำหนดพัฒนาใน Phase ถัดไป)
+
+---
+
+## 🗺️ สถาปัตยกรรมและแผนการพัฒนาต่อยอด (Architecture Roadmap)
+
+สามารถดูรายละเอียดของสเปกและสถาปัตยกรรมระบบสำหรับพัฒนาต่อยอดได้ที่:
+1. **[Architecture Specification](file:///d:/Planning_Project/Planning_Project/docs/Architecture.md)**: คำอธิบายโครงสร้างระบบและ Repository Pattern
+2. **[Google Sheets Schema](file:///d:/Planning_Project/Planning_Project/docs/GoogleSheetsSchema.md)**: โครงสร้างตารางและโมเดลฐานข้อมูลของชีตทั้ง 9 ตาราง
+3. **[API Contract Spec](file:///d:/Planning_Project/Planning_Project/docs/API_CONTRACT.md)**: ข้อกำหนด REST-like API สำหรับ Google Apps Script
+4. **[Deployment & Git Flow Guide](file:///d:/Planning_Project/Planning_Project/docs/DeploymentGuide.md)**: คำแนะนำการจัดการ Pipeline สำหรับ Dev, UAT และ Production
+
