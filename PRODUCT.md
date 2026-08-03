@@ -1,51 +1,58 @@
-# PRODUCT.md — ระบบวางแผนการผลิตรายสัปดาห์ (Weekly Production Planner)
+﻿# Product
 
-> **Context**: Greenfield Internal Weekly Production Planning System for Food Manufacturing Plant.
+<!-- impeccable:product-schema 1 -->
 
----
+## Platform
 
-## 1. Product Purpose & Overview
+web
 
-**ระบบวางแผนการผลิตรายสัปดาห์ (Weekly Production Planner)** คือระบบดิจิทัลสำหรับบริหารจัดการ แปรรูป และจัดตารางการผลิตอาหารประจำสัปดาห์ในโรงงานแปรรูปอาหาร เพื่อทดแทนการบันทึกกระดาษและไฟล์สเปรดชีตเดิม
+## Users
 
-### Core Value Proposition
-- **ความแม่นยำและรวดเร็ว**: รวบรวมใบสั่งซื้อ (Sales Orders) วิเคราะห์ความต้องการวัตถุดิบ (WIP / Prep Requirements) และคำนวณกำลังการผลิตย่อยตามไลน์ได้อย่างรวดเร็ว
-- **ลดความผิดพลาดในการสื่อสาร**: ใช้ภาษาไทยในการแสดงผล 100% ครอบคลุมคำศัพท์เฉพาะทางในโรงงานอาหาร
-- **ความสะดวกในการปฏิบัติงาน (Operational Excellence)**: ออกแบบสำหรับการใช้งานบนหน้าจอคอมพิวเตอร์ตั้งโต๊ะและโน้ตบุ๊กเป็นหลัก สนับสนุนการกรอกข้อมูลอย่างรวดเร็ว (Fast Keyboard & Batch Operations)
+- **นักวางแผนการผลิต (Planners)**: จัดตารางผลิตประจำสัปดาห์ กระจายคำสั่งซื้อลงไลน์ ต้องการมุมมองสรุปสัปดาห์ (Weekly Board)
+- **หัวหน้าฝ่ายผลิต (Production Supervisors)**: ควบคุมและจัดสรรงานประจำวัน ติดตาม WIP / Prep ต้องการเห็นสถานะเรียลไทม์
+- **ผู้จัดการโรงงาน (Plant Managers)**: อนุมัติแผนการผลิต ติดตามภาพรวมประสิทธิภาพ (OEE / Yield) ต้องการ Dashboard สรุปภาพรวม
+- **เจ้าหน้าที่บันทึกผลการผลิต (Floor Staff)**: บันทึกยอดผลิตจริง (Actuals) และของเสีย/WIP ต้องการฟอร์มบันทึกข้อมูลที่ปุ่มใหญ่ ตัวหนังสือชัดเจน ป้องกันการกรอกข้อมูลผิดพลาด
 
----
+## Product Purpose
 
-## 2. Target User Personas
+**ระบบวางแผนการผลิตรายสัปดาห์ (Weekly Production Planner)** คือระบบดิจิทัลสำหรับบริหารจัดการ แปรรูป และจัดตารางการผลิตอาหารประจำสัปดาห์ในโรงงานแปรรูปอาหาร ทดแทนการบันทึกกระดาษและไฟล์สเปรดชีตเดิม เน้นความแม่นยำ ลดความผิดพลาดในการสื่อสาร และความสะดวกในการปฏิบัติงาน
 
-| กลุ่มผู้ใช้งาน | บทบาทหน้าที่ | ความต้องการหลัก |
-| :--- | :--- | :--- |
-| **นักวางแผนการผลิต (Planners)** | จัดตารางผลิตประจำสัปดาห์ กระจายคำสั่งซื้อลงไลน์ | ต้องการมุมมองสรุปสัปดาห์ (Weekly Board) ที่ลากวางหรือปรับเปลี่ยนได้รวดเร็ว ชัดเจน |
-| **หัวหน้าฝ่ายผลิต (Production Supervisors)** | ควบคุมและจัดสรรงานประจำวัน ติดตาม WIP / Prep | ต้องการเห็นสถานะยอดวางแผนเทียบยอดผลิตจริงแบบเรียลไทม์ และพิมพ์ใบสั่งผลิตประจำวัน |
-| **ผู้จัดการโรงงาน (Plant Managers)** | อนุมัติแผนการผลิต ติดตามภาพรวมประสิทธิภาพ (OEE / Yield) | ต้องการ Dashboard สรุปภาพรวมรายสัปดาห์ อัตราการใช้กำลังการผลิต และคำเตือนวัตถุดิบขาด |
-| **เจ้าหน้าที่บันทึกผลการผลิต (Floor Staff)** | บันทึกยอดผลิตจริง (Actuals) และของเสีย/WIP | ต้องการฟอร์มบันทึกข้อมูลที่ปุ่มใหญ่ ตัวหนังสือชัดเจน ป้องกันการกรอกข้อมูลผิดพลาด |
+## Positioning
 
----
+ระบบ Internal Tool ที่ออกแบบเพื่อบริบทของโรงงานผลิตอาหารในไทยโดยเฉพาะ รองรับภาษาไทย 100% ครอบคลุมคำศัพท์เฉพาะทาง และรองรับการทำงานแบบหน้าจอเดียวด้วยความเร็วสูง (Fast Keyboard & Batch Operations)
 
-## 3. Usage Context & Environment
+## Operating Context
 
-- **Primary Device**: Desktop Computers & Factory Notebooks
-- **Target Viewport Resolution**: **1366 × 768** (Primary Standard) and **1440 × 900**
-- **User Interface Language**: **Thai Language Only (ภาษาไทย 100%)**
-- **Operating Environment**: Factory Office & Production Control Desk (แสงสว่างระดับโรงงาน ต้องการความเข้มข้นสีระดับ AA/AAA Readability)
+- ทำงานผ่าน Desktop Computers & Factory Notebooks ในออฟฟิศโรงงานและโต๊ะควบคุมการผลิต (แสงสว่างระดับโรงงาน)
+- Target Viewport: 1366 × 768 (Primary) และ 1440 × 900
 
----
+## Capabilities and Constraints
 
-## 4. Operational Usability Requirements
+- ใช้การแสดงผลแบบ High Contrast และ High Legibility
+- ใช้ฟอนต์ **IBM Plex Sans Thai** (เพิ่งอัปเดตใหม่เพื่อให้ดูคลีน สบายตา ทรงเดียวกับ Apple / Sukhumvit Set)
+- รองรับการเปลี่ยนช่องกรอกด้วย `Tab` / `Enter` และการเลือกรายการด้วยปุ่มลัด
+- ต้องมีรหัสสีและสถานะที่ชัดเจน (วางแผนแล้ว, กำลังผลิต, เสร็จสิ้น, มีปัญหา/ล่าช้า)
+- Data Layout มีความหนาแน่น (Dense yet Spacious) แต่ดูง่าย ไม่ต้องเลื่อนจอซ้ำซ้อน
 
-1. **High Contrast & High Legibility**: ใช้ฟอนต์ไทยอ่านง่าย (`Noto Sans Thai` เป็นหลัก) ป้องกันสระและวรรณยุกต์จมหรือโดนตัด
-2. **Dense yet Spacious Data Layout**: สามารถแสดงข้อมูลตารางการผลิต สเปกสินค้า และยอดรวมสัปดาห์ได้ครบถ้วนโดยไม่ต้องเลื่อนหน้าจอซ้ำซ้อน
-3. **Keyboard & Drag Navigation**: รองรับการเปลี่ยนช่องกรอกด้วย `Tab` / `Enter` และการเลือกรายการด้วยปุ่มลัด
-4. **Immediate Status Awareness**: ใช้รหัสสีและสถานะที่ชัดเจน (เช่น วางแผนแล้ว, กำลังผลิต, เสร็จสิ้น, มีปัญหา/ล่าช้า)
-
----
-
-## 5. Design Philosophy & Direction
+## Brand Commitments
 
 - **iOS-Inspired Fluidity & Clean Aesthetics**: เน้นความลื่นไหล โครงสร้างสัดส่วนสะอาด สัมผัสนุ่มนวล (Subtle Elevation & Smooth Radius)
-- **Practicality over Pure Decoration**: ไม่ใช้ Glassmorphism ที่บดบังการอ่านตัวเลข ไม่ใช้โทนสีมืดมัว ไม่ใช้การไล่เฉดสีที่ฉูดฉาดเกินไป
-- **Zero Distracting Animations**: ใช้ Transition แบบ Subtle (150ms – 250ms) เพื่อตอบสนองการกดปุ่ม สลับหน้า หรือเปิด Modal เท่านั้น
+- **Practicality over Pure Decoration**: ไม่ใช้ Glassmorphism ที่บดบังการอ่านตัวเลข ไม่ใช้โทนสีมืดมัว หรือสีเหลือบ (Gradients) ที่ฉูดฉาดเกินไป
+- **Zero Distracting Animations**: ใช้ Transition แบบ Subtle (150ms – 250ms) ตอบสนองการกดปุ่มเท่านั้น
+
+## Evidence on Hand
+
+- ข้อมูล Mockup สำหรับการทดสอบ (Suppliers, RM Items, Defect Matrix)
+- โครงสร้างฐานข้อมูลบน Google Apps Script (`DB_ReceivingRecords`, `DB_IssueLogs`, `DB_Suppliers`, `DB_RMItems`)
+- โค้ด Frontend ที่เชื่อมกับ Local Storage และส่งไปบันทึกที่ Google Apps Script
+
+## Product Principles
+
+1. ใช้งานง่าย รวดเร็ว พิมพ์โต้ตอบได้ฉับไว (Keyboard-friendly)
+2. ข้อมูลชัดเจนแม่นยำ ไม่สับสนด้วยภาษาไทย 100% 
+3. หน้าตาโปรเฟสชันนอล โมเดิร์น และดูพรีเมียม (Apple-like aesthetics) แต่ต้องเหมาะกับบริบทข้อมูลที่หนาแน่นในโรงงาน
+
+## Accessibility & Inclusion
+
+- ความเข้มข้นสีระดับ AA/AAA Readability สำหรับใช้งานในสภาพแวดล้อมโรงงาน
+- ไม่พึ่งพาการแยกแยะด้วยสีเพียงอย่างเดียว (มี Text Label หรือ Icon กำกับเสมอ)

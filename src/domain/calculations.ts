@@ -20,7 +20,12 @@ export function formatDateISO(date: Date): string {
 /**
  * Parse YYYY-MM-DD string or Date into a normalized Date object at midnight 00:00:00 local time
  */
-export function parseDateOnly(dateInput: Date | string): Date {
+export function parseDateOnly(dateInput?: Date | string | null): Date {
+  if (!dateInput) {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  }
+
   if (dateInput instanceof Date) {
     return new Date(dateInput.getFullYear(), dateInput.getMonth(), dateInput.getDate());
   }
@@ -39,19 +44,23 @@ export function parseDateOnly(dateInput: Date | string): Date {
   }
 
   const d = new Date(dateInput);
+  if (isNaN(d.getTime())) {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  }
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
 /**
  * 1. getProductionWeek(date)
- * Calculates Monday-Saturday production week for a given date.
+ * Calculates Monday-Saturday production week for a given date (defaults to Today).
  * Returns weekStart (Monday) and weekEnd (Saturday) in YYYY-MM-DD format.
  */
-export function getProductionWeek(dateInput: Date | string): {
+export function getProductionWeek(dateInput?: Date | string | null): {
   weekStart: string;
   weekEnd: string;
 } {
-  const date = parseDateOnly(dateInput);
+  const date = parseDateOnly(dateInput || new Date());
   const dayOfWeek = date.getDay(); // Sunday=0, Monday=1, ..., Saturday=6
 
   // Monday = 1, Saturday = 6, Sunday = 7 (belongs to preceding week starting previous Monday)
@@ -67,6 +76,18 @@ export function getProductionWeek(dateInput: Date | string): {
     weekStart: formatDateISO(monday),
     weekEnd: formatDateISO(saturday),
   };
+}
+
+/**
+ * Calculates the ISO week number for a given date (defaults to Today).
+ */
+export function getISOWeekNumber(dateInput?: Date | string | null): number {
+  const d = parseDateOnly(dateInput || new Date());
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  return Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
 }
 
 /**
@@ -123,17 +144,30 @@ export function getActivePlanRevision(plans: WeeklyPlan[]): WeeklyPlan | null {
 /**
  * Helper: Calculate total active allocated quantity for a specific sales order line across active plans.
  * Ensures allocations from PUBLISHED and SUPERSEDED revisions are not double counted!
+ * When actualEntries are provided, uses actual goodQty (self-correcting) instead of estimated fgOutputQty.
  */
 export function calculateActivePlannedQtyForLine(
   salesOrderLineId: string,
-  plans: WeeklyPlan[]
+  plans: WeeklyPlan[],
+  actualEntries?: ProductionActualEntry[]
 ): number {
   const activePlan = getActivePlanRevision(plans);
   if (!activePlan) return 0;
 
   return activePlan.allocations
     .filter((alloc) => alloc.salesOrderLineId === salesOrderLineId && alloc.fgOutputQty !== undefined)
-    .reduce((sum, alloc) => sum + alloc.fgOutputQty!, 0);
+    .reduce((sum, alloc) => {
+      // Self-correcting: if actual records exist for this allocation, use actual goodQty
+      if (actualEntries) {
+        const allocActuals = actualEntries.filter((e) => e.allocationId === alloc.allocationId);
+        if (allocActuals.length > 0) {
+          const totalGood = allocActuals.reduce((s, e) => s + e.goodQty, 0);
+          return sum + totalGood;
+        }
+      }
+      // No actual yet → use estimated fgOutputQty
+      return sum + alloc.fgOutputQty!;
+    }, 0);
 }
 
 /**

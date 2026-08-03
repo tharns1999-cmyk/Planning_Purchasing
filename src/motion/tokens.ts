@@ -48,8 +48,10 @@ export const modalVariants: Variants = {
 };
 
 export const sidebarVariants: Variants = {
-  expanded: { width: '240px', transition: { duration: MOTION_DURATIONS.slow, ease: MOTION_EASINGS.appleFluid } },
-  collapsed: { width: '64px', transition: { duration: MOTION_DURATIONS.slow, ease: MOTION_EASINGS.appleFluid } },
+  expanded: { width: '240px', x: 0, transition: { duration: MOTION_DURATIONS.slow, ease: MOTION_EASINGS.appleFluid } },
+  collapsed: { width: '64px', x: 0, transition: { duration: MOTION_DURATIONS.slow, ease: MOTION_EASINGS.appleFluid } },
+  mobile_expanded: { width: '280px', x: 0, transition: { duration: MOTION_DURATIONS.slow, ease: MOTION_EASINGS.appleFluid } },
+  mobile_collapsed: { width: '280px', x: '-100%', transition: { duration: MOTION_DURATIONS.slow, ease: MOTION_EASINGS.appleFluid } },
 };
 
 /**

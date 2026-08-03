@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, beforeEach } from 'vitest';
-import { OrdersPage } from '../features/orders/OrdersPage';
+import { OrdersPage } from '@/features/production/orders/OrdersPage';
 import { plannerRepository } from '../services/plannerService';
 
 describe('Phase 2B.1 — Sales Orders Read-Only Page Tests', () => {

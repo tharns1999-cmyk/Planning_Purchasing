@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { plannerRepository } from '@/services/plannerService';
-import { PrintPreviewPage } from '@/features/print-preview/PrintPreviewPage';
+import { PrintPreviewPage } from '@/features/production/print-preview/PrintPreviewPage';
 import { ActualEntryType } from '@/domain/types';
 import { toPng } from 'html-to-image';
 

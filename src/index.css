@@ -2,7 +2,8 @@
 
 @layer base {
   :root {
-    --font-thai: "Noto Sans Thai", "Leelawadee UI", Tahoma, system-ui, -apple-system, sans-serif;
+    --font-thai: "IBM Plex Sans Thai", "Sukhumvit Set", "Kanit", "Noto Sans Thai", "Leelawadee UI", Tahoma, system-ui, sans-serif;
+    --font-sarabun: "Sarabun", "Sarabun New", "TH Sarabun New", "Noto Sans Thai Looped", "Leelawadee", system-ui, sans-serif;
   }
 
   html, body {
@@ -12,6 +13,29 @@
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Global UI Polish: Smooth transitions for interactive elements */
+  button, a, select, input {
+    transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
+    transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+    transition-duration: 200ms;
+  }
+
+  /* Micro-interactions: scale down on active (click) */
+  button:active {
+    transform: scale(0.98);
+  }
+
+  /* Table row smooth hover */
+  tr {
+    transition: background-color 150ms ease-out;
+  }
+}
+
+@layer utilities {
+  .font-sarabun {
+    font-family: var(--font-sarabun);
   }
 }
 
@@ -87,7 +111,7 @@
 @media print {
   @page {
     size: A4 landscape;
-    margin: 6mm;
+    margin: 4mm;
   }
 
   body {
@@ -113,18 +137,72 @@
     height: auto !important;
   }
 
+  .print-preview-scroll-container {
+    overflow: visible !important;
+    width: 100% !important;
+    height: auto !important;
+  }
+
   .print-page {
     width: 100% !important;
     max-width: none !important;
-    padding: 0 !important;
+    padding: 2mm !important;
     margin: 0 !important;
     border: none !important;
     box-shadow: none !important;
+    overflow: visible !important;
+    border-radius: 0 !important;
   }
 
   .print-table {
     width: 100% !important;
     table-layout: fixed !important;
+    font-size: 6.5pt !important;
+  }
+
+  .print-table th {
+    padding: 1px 2px !important;
+    font-size: 6.5pt !important;
+    line-height: 1.2 !important;
+  }
+
+  .print-table td {
+    padding: 1px 2px !important;
+    font-size: 6.5pt !important;
+    line-height: 1.2 !important;
+  }
+
+  /* Ultra-compact print cards */
+  .print-table td > div > div {
+    margin-bottom: 1px !important;
+  }
+
+  .print-table td .space-y-2 > * + * {
+    margin-top: 1px !important;
+  }
+
+  .print-table td .space-y-1 > * + * {
+    margin-top: 1px !important;
+  }
+
+  /* Shrink card padding for print */
+  .print-table td [class*="p-1"],
+  .print-table td [class*="p-2"] {
+    padding: 1px 2px !important;
+  }
+
+  .print-table td [class*="space-y"] > * + * {
+    margin-top: 1px !important;
+  }
+
+  /* Compact printable header */
+  .printable-content > .border-b {
+    padding-bottom: 2px !important;
+    margin-bottom: 2px !important;
+  }
+
+  .printable-content .space-y-4 > * + * {
+    margin-top: 2px !important;
   }
 
   .min-h-screen,
@@ -142,9 +220,13 @@
     box-shadow: none !important;
   }
 
-  table, tr, td, th {
-    page-break-inside: avoid;
-    break-inside: avoid;
+  /* Allow table rows to flow naturally - do NOT set page-break-inside:avoid
+     on individual rows/cells as it forces content onto new pages */
+
+  /* The JS zoom on .printable-content handles fit-to-one-page */
+  .printable-content {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
   }
 }
-

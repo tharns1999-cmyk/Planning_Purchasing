@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { LocalStorageRepository } from '@/services/repositories/LocalStorageRepository';
-import { CreatePoModal } from '@/features/orders/CreatePoModal';
-import { MasterDataPage } from '@/features/master-data/MasterDataPage';
+import { CreatePoModal } from '@/features/production/orders/CreatePoModal';
+import { MasterDataPage } from '@/features/production/master-data/MasterDataPage';
 import { SEED_CUSTOMERS } from '@/data/seedData';
 
 

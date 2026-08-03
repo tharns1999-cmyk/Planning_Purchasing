@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { LocalStorageRepository } from '@/services/repositories/LocalStorageRepository';
-import { OverviewPage } from '@/features/overview/OverviewPage';
-import { OrdersPage } from '@/features/orders/OrdersPage';
+import { OverviewPage } from '@/features/production/overview/OverviewPage';
+import { OrdersPage } from '@/features/production/orders/OrdersPage';
 import { buildOverviewReadModel } from '@/domain/readModels';
 import { DueStatus, Priority } from '@/domain/types';
 

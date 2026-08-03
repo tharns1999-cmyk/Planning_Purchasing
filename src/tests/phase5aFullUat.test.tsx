@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { plannerRepository } from '@/services/plannerService';
-import { PrintPreviewPage } from '@/features/print-preview/PrintPreviewPage';
-import { PlanningPage } from '@/features/planning/PlanningPage';
+import { PrintPreviewPage } from '@/features/production/print-preview/PrintPreviewPage';
+import { PlanningPage } from '@/features/production/planning/PlanningPage';
 import { ActualEntryType, Priority } from '@/domain/types';
 import { toPng } from 'html-to-image';
 

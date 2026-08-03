@@ -1,14 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
-import { LocalStorageRepository } from '@/services/repositories/LocalStorageRepository';
-import { PlanningPage } from '@/features/planning/PlanningPage';
+import { plannerRepository as repository } from '@/services/plannerService';
+import { PlanningPage } from '@/features/production/planning/PlanningPage';
 
 describe('PHASE 3C.2 — Printable Plan Notes & Customer Tags', () => {
-  let repository: LocalStorageRepository;
-
   beforeEach(() => {
     localStorage.clear();
-    repository = new LocalStorageRepository();
+    repository.reset();
     repository.initialize();
   });
 

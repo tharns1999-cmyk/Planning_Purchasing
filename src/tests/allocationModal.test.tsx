@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { AllocationModal } from '../features/planning/AllocationModal';
+import { AllocationModal } from '@/features/production/planning/AllocationModal';
 import { plannerRepository } from '../services/plannerService';
 import { Priority, DueStatus } from '../domain/types';
 import { PlanningQueueFgItem } from '../services/repositories/PlannerRepository';
@@ -26,6 +26,7 @@ describe('Phase 3C.1 — Fix FG Output Qty Deduction Rule Tests', () => {
     dueDate: '2026-07-22',
     priority: Priority.URGENT,
     dueStatus: DueStatus.DUE_SOON,
+    planningStatus: 'UNPLANNED',
   };
 
   beforeEach(() => {

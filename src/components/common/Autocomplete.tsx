@@ -49,9 +49,9 @@ export const Autocomplete: React.FC<AutocompleteProps> = ({
     if (!value) return true;
     const query = value.toLowerCase().trim();
     return (
-      opt.label.toLowerCase().includes(query) ||
-      opt.value.toLowerCase().includes(query) ||
-      (opt.subLabel && opt.subLabel.toLowerCase().includes(query))
+      String(opt.label || '').toLowerCase().includes(query) ||
+      String(opt.value || '').toLowerCase().includes(query) ||
+      (opt.subLabel ? String(opt.subLabel).toLowerCase().includes(query) : false)
     );
   });
 
@@ -151,7 +151,7 @@ export const Autocomplete: React.FC<AutocompleteProps> = ({
 
       {/* Dropdown Options */}
       {isOpen && !disabled && (
-        <div className="absolute top-full left-0 right-0 mt-1 max-h-56 overflow-y-auto bg-white border border-slate-200 rounded-lg shadow-lg z-50 py-1 text-xs">
+        <div className="absolute top-full left-0 right-0 mt-1 max-h-56 overflow-y-auto bg-white border border-slate-200 rounded-lg shadow-2xl z-[9999] py-1 text-xs">
           {filteredOptions.length === 0 ? (
             <div className="px-3 py-2 text-slate-400 text-center italic">{emptyText}</div>
           ) : (
@@ -165,11 +165,11 @@ export const Autocomplete: React.FC<AutocompleteProps> = ({
                 onMouseEnter={() => setHighlightedIndex(idx)}
                 className={clsx(
                   'px-3 py-2 cursor-pointer transition-colors flex flex-col gap-0.5',
-                  idx === highlightedIndex ? 'bg-sky-50 text-sky-900 font-medium' : 'text-slate-700 hover:bg-slate-50'
+                  idx === highlightedIndex ? 'bg-sky-50 text-sky-900 font-medium' : 'text-sky-800 hover:bg-slate-50'
                 )}
               >
-                <div className="font-semibold text-slate-900">{opt.label}</div>
-                {opt.subLabel && <div className="text-[11px] text-slate-500">{opt.subLabel}</div>}
+                <div className={clsx("font-semibold", idx === highlightedIndex ? "text-sky-900" : "text-slate-900")}>{opt.label}</div>
+                {opt.subLabel && <div className={clsx("text-[11px]", idx === highlightedIndex ? "text-sky-700" : "text-slate-500")}>{opt.subLabel}</div>}
               </div>
             ))
           )}

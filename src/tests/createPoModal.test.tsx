@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { CreatePoModal } from '../features/orders/CreatePoModal';
+import { CreatePoModal } from '@/features/production/orders/CreatePoModal';
 import { plannerRepository } from '../services/plannerService';
 import { Priority } from '../domain/types';
 

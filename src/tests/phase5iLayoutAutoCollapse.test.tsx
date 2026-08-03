@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import { Sidebar } from '@/components/layout/Sidebar';
-import { PlanningPage } from '@/features/planning/PlanningPage';
+import { PlanningPage } from '@/features/production/planning/PlanningPage';
 import { plannerRepository } from '@/services/plannerService';
 import { THAI_TRANSLATIONS } from '@/i18n/th';
 

@@ -3,17 +3,17 @@ import { NavLink } from 'react-router-dom';
 import { motion } from 'motion/react';
 import {
   LayoutDashboard,
+  PieChart,
   FileText,
   CalendarDays,
   Truck,
   CheckSquare,
   Printer,
   Database,
-  Settings,
-  Sparkles,
   ChevronLeft,
   ChevronRight,
   Factory,
+  ArrowLeft,
 } from 'lucide-react';
 import { THAI_TRANSLATIONS } from '@/i18n/th';
 import { sidebarVariants } from '@/motion/tokens';
@@ -21,34 +21,55 @@ import { sidebarVariants } from '@/motion/tokens';
 interface SidebarProps {
   isCollapsed: boolean;
   onToggleCollapse: () => void;
+  isMobileOpen?: boolean;
+  onCloseMobile?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse, isMobileOpen, onCloseMobile }) => {
   const [isHovered, setIsHovered] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Check viewport on mount and resize
+  React.useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Effective state: collapsed if manually collapsed AND not currently hovered
-  const effectiveCollapsed = isCollapsed && !isHovered;
+  const effectiveCollapsed = !isMobile && isCollapsed && !isHovered;
 
   const navItems = [
-    { to: '/', label: THAI_TRANSLATIONS.nav.overview, icon: LayoutDashboard },
-    { to: '/orders', label: THAI_TRANSLATIONS.nav.orders, icon: FileText },
-    { to: '/planning', label: THAI_TRANSLATIONS.nav.planning, icon: CalendarDays },
-    { to: '/calendar', label: THAI_TRANSLATIONS.nav.calendar, icon: Truck },
-    { to: '/actuals', label: THAI_TRANSLATIONS.nav.actuals, icon: CheckSquare },
-    { to: '/print-preview', label: THAI_TRANSLATIONS.nav.printPreview, icon: Printer },
-    { to: '/masters', label: THAI_TRANSLATIONS.nav.masterData, icon: Database },
-    { to: '/settings', label: THAI_TRANSLATIONS.nav.settings, icon: Settings },
+    { to: '/production/dashboard', label: THAI_TRANSLATIONS.nav.dashboard, icon: LayoutDashboard },
+    { to: '/production/overview', label: THAI_TRANSLATIONS.nav.overview, icon: PieChart },
+    { to: '/production/orders', label: THAI_TRANSLATIONS.nav.orders, icon: FileText },
+    { to: '/production/planning', label: THAI_TRANSLATIONS.nav.planning, icon: CalendarDays },
+    { to: '/production/calendar', label: THAI_TRANSLATIONS.nav.calendar, icon: Truck },
+    { to: '/production/actuals', label: THAI_TRANSLATIONS.nav.actuals, icon: CheckSquare },
+    { to: '/production/print-preview', label: THAI_TRANSLATIONS.nav.printPreview, icon: Printer },
+    { to: '/production/master-data', label: THAI_TRANSLATIONS.nav.masterData, icon: Database },
   ];
 
   return (
-    <motion.aside
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      variants={sidebarVariants}
-      animate={effectiveCollapsed ? 'collapsed' : 'expanded'}
-      initial={false}
-      className="relative z-20 h-screen bg-slate-900 text-white flex flex-col border-r border-slate-800 shrink-0 shadow-lg select-none"
-    >
+    <>
+      {/* Mobile Backdrop */}
+      {isMobile && isMobileOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 transition-opacity"
+          onClick={onCloseMobile}
+          aria-hidden="true"
+        />
+      )}
+
+      <motion.aside
+        onMouseEnter={() => !isMobile && setIsHovered(true)}
+        onMouseLeave={() => !isMobile && setIsHovered(false)}
+        variants={sidebarVariants}
+        animate={isMobile ? (isMobileOpen ? 'mobile_expanded' : 'mobile_collapsed') : (effectiveCollapsed ? 'collapsed' : 'expanded')}
+        initial={false}
+        className={`fixed md:relative z-50 h-screen bg-slate-900 text-white flex flex-col border-r border-slate-800 shrink-0 shadow-lg select-none`}
+      >
       {/* Brand Header */}
       <div className="h-14 flex items-center justify-between px-4 border-b border-slate-800/80">
         <div className="flex items-center gap-3 overflow-hidden">
@@ -65,11 +86,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse 
           </div>
         </div>
         <button
-          onClick={onToggleCollapse}
-          aria-label={effectiveCollapsed ? 'ขยายเมนู' : 'ย่อเมนู'}
+          onClick={isMobile ? onCloseMobile : onToggleCollapse}
+          aria-label={isMobile ? 'ปิดเมนู' : (effectiveCollapsed ? 'ขยายเมนู' : 'ย่อเมนู')}
           className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
         >
-          {effectiveCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+          {isMobile ? <ArrowLeft className="w-4 h-4" /> : (effectiveCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />)}
         </button>
       </div>
 
@@ -82,6 +103,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse 
               key={item.to}
               to={item.to}
               end={item.to === '/'}
+              onClick={() => isMobile && onCloseMobile?.()}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors leading-normal ${
                   isActive
@@ -97,24 +119,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse 
           );
         })}
 
-        <div className="my-2 border-t border-slate-800" />
-
-        {/* Temporary Dev Showcase Link */}
-        <NavLink
-          to="/showcase"
-          className={({ isActive }) =>
-            `flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium transition-colors ${
-              isActive
-                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                : 'text-amber-400/80 hover:text-amber-300 hover:bg-slate-800/60'
-            }`
-          }
-          title={effectiveCollapsed ? THAI_TRANSLATIONS.nav.showcase : undefined}
-        >
-          <Sparkles className="w-4 h-4 shrink-0 text-amber-400" />
-          <span className={effectiveCollapsed ? 'sr-only' : 'truncate'}>{THAI_TRANSLATIONS.nav.showcase}</span>
-        </NavLink>
       </nav>
+
+      {/* Back to Portal */}
+      <div className="p-3 border-t border-slate-800">
+        <NavLink
+          to="/"
+          className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors leading-normal text-slate-400 hover:text-white hover:bg-slate-800/80 ${effectiveCollapsed ? 'justify-center' : ''}`}
+          title={effectiveCollapsed ? 'กลับหน้าหลัก (Portal)' : undefined}
+        >
+          <ArrowLeft className="w-5 h-5 shrink-0" />
+          <span className={effectiveCollapsed ? 'sr-only' : 'truncate'}>กลับหน้าหลัก (Portal)</span>
+        </NavLink>
+      </div>
 
       {/* Footer / User Info */}
       <div className="p-3 border-t border-slate-800 text-xs text-slate-400 flex items-center gap-2">
@@ -127,5 +144,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggleCollapse 
         </div>
       </div>
     </motion.aside>
+    </>
   );
 };

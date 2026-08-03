@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { LocalStorageRepository } from '@/services/repositories/LocalStorageRepository';
-import { PlanningPage } from '@/features/planning/PlanningPage';
+import { PlanningPage } from '@/features/production/planning/PlanningPage';
 
 describe('BUG FIX — Multiple Allocations in Same Cell Tests', () => {
   let repository: LocalStorageRepository;

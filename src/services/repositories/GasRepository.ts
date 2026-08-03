@@ -1,0 +1,541 @@
+import { DatabaseSchema, LOCAL_STORAGE_DB_KEY } from '../databaseSchema';
+import { SEED_ROOMS } from '../../data/seedData';
+import { LocalStorageRepository } from './LocalStorageRepository';
+import {
+  CreateCustomerInput,
+  CreateCustomerResult,
+  UpdateCustomerInput,
+  UpdateCustomerResult,
+  SetCustomerActiveResult,
+  CreateProductInput,
+  CreateProductResult,
+  UpdateProductInput,
+  UpdateProductResult,
+  SetProductActiveResult,
+  CreateSalesOrderHeaderInput,
+  CreateSalesOrderLineInput,
+  CreateSalesOrderResult,
+  UpdateSalesOrderHeaderInput,
+  UpdateSalesOrderLineItemInput,
+  UpdateSalesOrderResult,
+  CreateWipPrepItemInput,
+  CreateWipPrepItemResult,
+  UpdateWipPrepItemInput,
+  UpdateWipPrepItemResult,
+  CreateWipItemInput,
+  UpdateWipItemInput,
+  CreateDraftPlanResult,
+  PublishPlanResult,
+  CancelDraftPlanResult,
+  CreateFgAllocationInput,
+  CreateWipPrepAllocationInput,
+  CreateAllocationResult,
+  UpdateAllocationInput,
+  UpdateAllocationResult,
+  RemoveAllocationResult,
+  CreatePlanRevisionResult,
+  PublishPlanRevisionResult,
+  CancelPlanRevisionResult,
+  CreateBoardNoteInput,
+  UpdateBoardNoteInput,
+  CreateBoardNoteResult,
+  UpdateBoardNoteResult,
+  RemoveBoardNoteResult,
+  AppendProductionActualInput,
+  AppendProductionActualResult
+} from './PlannerRepository';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+declare const google: any;
+
+export class GasRepository extends LocalStorageRepository {
+  private gasInitialized = false;
+  private isGoogleAvailable = typeof google !== 'undefined' && typeof google.script !== 'undefined';
+
+  /**
+   * Asynchronously load data from GAS. 
+   * If running locally, it falls back to LocalStorage initialization.
+   */
+  async initializeAsync(force: boolean = false): Promise<void> {
+    if (!this.isGoogleAvailable) {
+      console.warn("Running in Local Dev Mode (Fallback to LocalStorage)");
+      this.initialize();
+      return;
+    }
+
+    if (this.gasInitialized && !force) {
+       this.initialize();
+       return;
+    }
+
+    return new Promise((resolve) => {
+      const timeoutId = setTimeout(() => {
+        console.warn("GAS fetch timed out after 12s, unblocking UI with cached data.");
+        this.initialize();
+        resolve();
+      }, 12000);
+
+      google.script.run
+        .withSuccessHandler((response: any) => {
+          clearTimeout(timeoutId);
+          let rawGasData = response;
+          if (typeof response === 'string') {
+            try {
+              rawGasData = JSON.parse(response);
+            } catch (e) {
+              console.error("Failed to parse JSON snapshot from GAS", e);
+            }
+          }
+
+          const rawCustomers = (rawGasData.customers || []).filter((c: any) => c && typeof c === 'object').map((c: any, idx: number) => ({
+            ...c,
+            customerId: (c.customerId && String(c.customerId).trim() !== '') ? String(c.customerId).trim() : `cust-fallback-${Date.now()}-${idx}`,
+            customerCode: c.customerCode ? String(c.customerCode).trim() : '',
+            customerName: c.customerName ? String(c.customerName).trim() : '',
+            active: typeof c.active === 'boolean' ? c.active : (String(c.active).toUpperCase() !== 'FALSE'),
+            createdAt: c.createdAt || new Date().toISOString(),
+            updatedAt: c.updatedAt || new Date().toISOString()
+          })).filter((c: any) => c.customerCode || c.customerName);
+
+          const customerIdSet = new Set(rawCustomers.map((c: any) => c.customerId));
+
+          const rawProducts = (rawGasData.products || []).filter((p: any) => p && typeof p === 'object').map((p: any, idx: number) => ({
+            ...p,
+            productId: (p.productId && String(p.productId).trim() !== '') ? String(p.productId).trim() : `prod-fallback-${Date.now()}-${idx}`,
+            productCode: p.productCode ? String(p.productCode).trim() : '',
+            productName: p.productName ? String(p.productName).trim() : '',
+            customerId: (p.customerId && customerIdSet.has(p.customerId)) ? p.customerId : undefined,
+            active: typeof p.active === 'boolean' ? p.active : (String(p.active).toUpperCase() !== 'FALSE'),
+            createdAt: p.createdAt || new Date().toISOString(),
+            updatedAt: p.updatedAt || new Date().toISOString()
+          })).filter((p: any) => p.productCode || p.productName);
+
+          // --- Helper to normalize date-only strings (Google Sheets may convert them to full ISO datetimes) ---
+          const normDate = (v: any): string => {
+            if (!v) return '';
+            const s = String(v).trim();
+            // "2026-07-28T00:00:00.000Z" → "2026-07-28"
+            if (s.length >= 10 && s[4] === '-' && s[7] === '-') return s.substring(0, 10);
+            return s;
+          };
+          const coerceNum = (v: any): number => {
+            if (v === '' || v === null || v === undefined) return 0;
+            const n = Number(v);
+            return isNaN(n) ? 0 : n;
+          };
+
+          // Normalize plans
+          const rawWeeklyPlans = (rawGasData.weeklyPlans || []).map((p: any) => ({
+            ...p,
+            weekStart: normDate(p.weekStart),
+            weekEnd: normDate(p.weekEnd),
+          }));
+
+          // Normalize allocations
+          const rawPlanAllocations = (rawGasData.planAllocations || []).map((a: any) => ({
+            ...a,
+            productionDate: normDate(a.productionDate),
+            plannedQty: coerceNum(a.plannedQty),
+            fgOutputQty: a.fgOutputQty !== undefined && a.fgOutputQty !== '' ? coerceNum(a.fgOutputQty) : undefined,
+            displayOrder: a.displayOrder !== undefined && a.displayOrder !== '' ? coerceNum(a.displayOrder) : 0,
+          }));
+
+          // Stitch allocations into plans
+          const stitchedWeeklyPlans = rawWeeklyPlans.map((p: any) => ({
+            ...p,
+            allocations: rawPlanAllocations.filter((a: any) => a.planId && p.id && String(a.planId).trim() === String(p.id).trim())
+          }));
+
+          // Normalize order lines
+          const rawOrderLines = (rawGasData.salesOrderLines || []).map((l: any) => ({
+            ...l,
+            skuCode: l.skuCode !== undefined && l.skuCode !== null ? String(l.skuCode).trim() : '',
+            skuName: l.skuName !== undefined && l.skuName !== null ? String(l.skuName).trim() : '',
+            dueDate: normDate(l.dueDate),
+            orderedQty: coerceNum(l.orderedQty),
+            cancelledQty: coerceNum(l.cancelledQty),
+            completedQty: l.completedQty !== undefined ? coerceNum(l.completedQty) : undefined,
+            shortageQty: l.shortageQty !== undefined ? coerceNum(l.shortageQty) : undefined,
+            boxQty: l.boxQty !== undefined ? coerceNum(l.boxQty) : undefined,
+          }));
+
+          // Normalize sales orders
+          const rawSalesOrders = (rawGasData.salesOrders || []).map((o: any) => ({
+            ...o,
+            orderNo: o.orderNo !== undefined && o.orderNo !== null ? String(o.orderNo).trim() : '',
+            orderDate: normDate(o.orderDate),
+          }));
+
+          // Normalize board notes
+          const rawBoardNotes = (rawGasData.boardNotes || []).map((n: any) => ({
+            ...n,
+            productionDate: normDate(n.productionDate),
+            displayOrder: n.displayOrder !== undefined && n.displayOrder !== '' ? coerceNum(n.displayOrder) : 0,
+          }));
+
+          // Normalize production actuals
+          const rawActuals = (rawGasData.productionActualEntries || []).map((e: any) => ({
+            ...e,
+            goodQty: coerceNum(e.goodQty),
+            wasteQty: coerceNum(e.wasteQty),
+            reworkQty: coerceNum(e.reworkQty),
+            shortfallQty: coerceNum(e.shortfallQty),
+            boxQty: e.boxQty !== undefined ? coerceNum(e.boxQty) : undefined,
+          }));
+
+          const snapshot: DatabaseSchema = {
+            schemaVersion: 1,
+            initializedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            entities: {
+              rooms: SEED_ROOMS,
+              customers: rawCustomers,
+              products: rawProducts,
+              salesOrders: rawSalesOrders,
+              salesOrderLines: rawOrderLines,
+              wipPrepItems: rawGasData.wipPrepItems || [],
+              weeklyPlans: stitchedWeeklyPlans,
+              planAllocations: rawPlanAllocations,
+              boardNotes: rawBoardNotes,
+              productionActualEntries: rawActuals
+            }
+          };
+
+          const importRes = this.importDatabase(snapshot);
+          if (!importRes.success) {
+            console.warn("GAS snapshot import warning:", importRes.errors);
+            localStorage.setItem(LOCAL_STORAGE_DB_KEY, JSON.stringify(snapshot));
+          }
+
+          this.initialize();
+          this.gasInitialized = true;
+          resolve();
+        })
+        .withFailureHandler((error: any) => {
+          clearTimeout(timeoutId);
+          console.error("Failed to fetch data from GAS:", error);
+          this.initialize();
+          resolve();
+        })
+        .apiGetSnapshot();
+    });
+  }
+
+  // --- GAS Sync Helpers ---
+
+  private syncMasterDataToGas() {
+    if (!this.isGoogleAvailable) return;
+    const snap = this.getSnapshot();
+    google.script.run
+      .withSuccessHandler(() => console.log("Master data synced to GAS"))
+      .withFailureHandler((err: any) => console.error("syncMasterDataToGas failed:", err))
+      .apiUpdateMasterData({
+        customers: snap.entities.customers,
+        products: snap.entities.products,
+        wipPrepItems: snap.entities.wipPrepItems
+      });
+  }
+
+  private syncSalesOrderToGas(orderId: string) {
+    if (!this.isGoogleAvailable) return;
+    const snap = this.getSnapshot();
+    const order = snap.entities.salesOrders.find(o => o.id === orderId);
+    const lines = snap.entities.salesOrderLines.filter(l => l.orderId === orderId);
+    if (order) {
+      google.script.run
+        .withSuccessHandler(() => console.log(`Order ${orderId} synced to GAS`))
+        .withFailureHandler((err: any) => console.error("syncSalesOrderToGas failed:", err))
+        .apiSaveSalesOrder(order, lines);
+    }
+  }
+
+  private syncWeeklyPlanToGas(planId: string) {
+    if (!this.isGoogleAvailable) return;
+    const snap = this.getSnapshot();
+    const plan = snap.entities.weeklyPlans.find(p => String(p.id).trim() === String(planId).trim());
+    if (plan) {
+      google.script.run
+        .withSuccessHandler(() => console.log(`Plan ${planId} saved to GAS successfully`))
+        .withFailureHandler((err: any) => console.error("apiSaveWeeklyPlan failed:", err))
+        .apiSaveWeeklyPlan(plan, snap.entities.planAllocations, snap.entities.boardNotes);
+    }
+  }
+
+  private syncActualProductionToGas(entry: any) {
+    if (!this.isGoogleAvailable) return;
+    google.script.run
+      .withSuccessHandler(() => console.log("Actual entry saved to GAS successfully"))
+      .withFailureHandler((err: any) => console.error("apiRecordActualProduction failed:", err))
+      .apiRecordActualProduction(entry);
+  }
+
+  private syncFullSnapshotToGas() {
+    if (!this.isGoogleAvailable) return;
+    const snap = this.getSnapshot();
+    google.script.run
+      .withSuccessHandler(() => console.log("Full snapshot saved to GAS successfully"))
+      .withFailureHandler((err: any) => console.error("apiSaveFullSnapshot failed:", err))
+      .apiSaveFullSnapshot(JSON.stringify(snap));
+  }
+
+  // --- Overrides for Customer Master ---
+
+  createCustomer(input: CreateCustomerInput): CreateCustomerResult {
+    const res = super.createCustomer(input);
+    if (res.success) this.syncMasterDataToGas();
+    return res;
+  }
+
+  updateCustomer(customerId: string, input: UpdateCustomerInput): UpdateCustomerResult {
+    const res = super.updateCustomer(customerId, input);
+    if (res.success) this.syncMasterDataToGas();
+    return res;
+  }
+
+  setCustomerActive(customerId: string, active: boolean): SetCustomerActiveResult {
+    const res = super.setCustomerActive(customerId, active);
+    if (res.success) this.syncMasterDataToGas();
+    return res;
+  }
+
+  // --- Overrides for Product Master ---
+
+  createProduct(input: CreateProductInput): CreateProductResult {
+    const res = super.createProduct(input);
+    if (res.success) this.syncMasterDataToGas();
+    return res;
+  }
+
+  updateProduct(productId: string, input: UpdateProductInput): UpdateProductResult {
+    const res = super.updateProduct(productId, input);
+    if (res.success) this.syncMasterDataToGas();
+    return res;
+  }
+
+  setProductActive(productId: string, active: boolean): SetProductActiveResult {
+    const res = super.setProductActive(productId, active);
+    if (res.success) this.syncMasterDataToGas();
+    return res;
+  }
+
+  // --- Overrides for WIP/PREP Master ---
+
+  createWipPrepItem(input: CreateWipPrepItemInput): CreateWipPrepItemResult {
+    const res = super.createWipPrepItem(input);
+    if (res.success) this.syncMasterDataToGas();
+    return res;
+  }
+
+  createWipItem(input: CreateWipItemInput): CreateWipPrepItemResult {
+    const res = super.createWipItem(input);
+    if (res.success) this.syncMasterDataToGas();
+    return res;
+  }
+
+  updateWipPrepItem(itemId: string, input: UpdateWipPrepItemInput): UpdateWipPrepItemResult {
+    const res = super.updateWipPrepItem(itemId, input);
+    if (res.success) this.syncMasterDataToGas();
+    return res;
+  }
+
+  updateWipItem(itemId: string, input: UpdateWipItemInput): UpdateWipPrepItemResult {
+    const res = super.updateWipItem(itemId, input);
+    if (res.success) this.syncMasterDataToGas();
+    return res;
+  }
+
+  setWipPrepItemActive(itemId: string, active: boolean): boolean {
+    const res = super.setWipPrepItemActive(itemId, active);
+    if (res) this.syncMasterDataToGas();
+    return res;
+  }
+
+  setWipItemActive(itemId: string, active: boolean): boolean {
+    const res = super.setWipItemActive(itemId, active);
+    if (res) this.syncMasterDataToGas();
+    return res;
+  }
+
+  // --- Overrides for Sales Orders ---
+
+  createSalesOrderWithLines(headerInput: CreateSalesOrderHeaderInput, lineInputs: CreateSalesOrderLineInput[]): CreateSalesOrderResult {
+    const res = super.createSalesOrderWithLines(headerInput, lineInputs);
+    if (res.success && res.order) {
+      this.syncSalesOrderToGas(res.order.id);
+    }
+    return res;
+  }
+
+  updateSalesOrder(orderId: string, headerInput: UpdateSalesOrderHeaderInput, lineInputs: UpdateSalesOrderLineItemInput[]): UpdateSalesOrderResult {
+    const res = super.updateSalesOrder(orderId, headerInput, lineInputs);
+    if (res.success && res.order) {
+      this.syncSalesOrderToGas(res.order.id);
+    }
+    return res;
+  }
+
+  // --- Overrides for Weekly Plans & Lifecycle ---
+
+  createDraftPlan(weekStart: string): CreateDraftPlanResult {
+    const res = super.createDraftPlan(weekStart);
+    if (res.success && res.plan) {
+      this.syncWeeklyPlanToGas(res.plan.id);
+    }
+    return res;
+  }
+
+  publishPlan(planId: string): PublishPlanResult {
+    const res = super.publishPlan(planId);
+    if (res.success && res.plan) {
+      this.syncWeeklyPlanToGas(planId);
+    }
+    return res;
+  }
+
+  cancelDraftPlan(planId: string): CancelDraftPlanResult {
+    const res = super.cancelDraftPlan(planId);
+    if (res.success) {
+      this.syncWeeklyPlanToGas(planId);
+    }
+    return res;
+  }
+
+  createPlanRevision(publishedPlanId: string): CreatePlanRevisionResult {
+    const res = super.createPlanRevision(publishedPlanId);
+    if (res.success && res.plan) {
+      this.syncWeeklyPlanToGas(res.plan.id);
+      this.syncWeeklyPlanToGas(publishedPlanId);
+    }
+    return res;
+  }
+
+  publishPlanRevision(draftPlanId: string): PublishPlanRevisionResult {
+    const res = super.publishPlanRevision(draftPlanId);
+    if (res.success && res.plan) {
+      this.syncWeeklyPlanToGas(draftPlanId);
+      if (res.plan.sourcePlanId) {
+        this.syncWeeklyPlanToGas(res.plan.sourcePlanId);
+      }
+    }
+    return res;
+  }
+
+  cancelPlanRevision(draftPlan: any): CancelPlanRevisionResult {
+    const res = super.cancelPlanRevision(draftPlan);
+    if (res.success) {
+      const planId = typeof draftPlan === 'string' ? draftPlan : draftPlan.id;
+      if (planId) this.syncWeeklyPlanToGas(planId);
+    }
+    return res;
+  }
+
+  // --- Overrides for Plan Allocations ---
+
+  createFgAllocation(input: CreateFgAllocationInput): CreateAllocationResult {
+    const res = super.createFgAllocation(input);
+    if (res.success && res.allocation) {
+      this.syncWeeklyPlanToGas(res.allocation.planId);
+    }
+    return res;
+  }
+
+  createWipPrepAllocation(input: CreateWipPrepAllocationInput): CreateAllocationResult {
+    const res = super.createWipPrepAllocation(input);
+    if (res.success && res.allocation) {
+      this.syncWeeklyPlanToGas(res.allocation.planId);
+    }
+    return res;
+  }
+
+  updateAllocation(allocationId: string, input: UpdateAllocationInput): UpdateAllocationResult {
+    const res = super.updateAllocation(allocationId, input);
+    if (res.success && res.allocation) {
+      this.syncWeeklyPlanToGas(res.allocation.planId);
+    }
+    return res;
+  }
+
+  removeAllocation(allocationId: string): RemoveAllocationResult {
+    const snapBefore = this.getSnapshot();
+    const allocBefore = snapBefore.entities.planAllocations.find(a => a.allocationId === allocationId);
+    const planId = allocBefore?.planId;
+
+    const res = super.removeAllocation(allocationId);
+    if (res.success && planId) {
+      this.syncWeeklyPlanToGas(planId);
+    }
+    return res;
+  }
+
+  // --- Overrides for Board Notes ---
+
+  createBoardNote(input: CreateBoardNoteInput): CreateBoardNoteResult {
+    const res = super.createBoardNote(input);
+    if (res.success && res.note) {
+      this.syncWeeklyPlanToGas(res.note.planId);
+    }
+    return res;
+  }
+
+  updateBoardNote(noteId: string, input: UpdateBoardNoteInput): UpdateBoardNoteResult {
+    const res = super.updateBoardNote(noteId, input);
+    if (res.success && res.note) {
+      this.syncWeeklyPlanToGas(res.note.planId);
+    }
+    return res;
+  }
+
+  removeBoardNote(noteId: string): RemoveBoardNoteResult {
+    const snapBefore = this.getSnapshot();
+    const noteBefore = snapBefore.entities.boardNotes.find(n => n.noteId === noteId);
+    const planId = noteBefore?.planId;
+
+    const res = super.removeBoardNote(noteId);
+    if (res.success && planId) {
+      this.syncWeeklyPlanToGas(planId);
+    }
+    return res;
+  }
+
+  // --- Overrides for Production Actuals ---
+
+  appendProductionActual(input: AppendProductionActualInput): AppendProductionActualResult {
+    const res = super.appendProductionActual(input);
+    if (res.success && res.actualEntry) {
+      this.syncActualProductionToGas(res.actualEntry);
+      
+      if (this.isGoogleAvailable) {
+        const snap = this.getSnapshot();
+        const allocation = snap.entities.planAllocations.find(a => a.allocationId === res.actualEntry?.allocationId);
+        if (allocation) {
+          this.syncWeeklyPlanToGas(allocation.planId);
+          if (allocation.salesOrderId) {
+            this.syncSalesOrderToGas(allocation.salesOrderId);
+          }
+        }
+        this.syncFullSnapshotToGas();
+      }
+    }
+    return res;
+  }
+
+  // --- Overrides for Data Tools (Reset / Clear / Import) ---
+
+  reset(): void {
+    super.reset();
+    this.syncFullSnapshotToGas();
+  }
+
+  clearOperationalData(): void {
+    super.clearOperationalData();
+    this.syncFullSnapshotToGas();
+  }
+
+  importDatabase(data: unknown): { success: boolean; errors?: string[] } {
+    const res = super.importDatabase(data);
+    if (res.success && this.gasInitialized) {
+      this.syncFullSnapshotToGas();
+    }
+    return res;
+  }
+}

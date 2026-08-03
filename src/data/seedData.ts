@@ -330,3 +330,21 @@ export const INITIAL_SEED_DATABASE: DatabaseSchema = {
   entities: INITIAL_SEED_ENTITIES,
 };
 
+export const EMPTY_DATABASE: DatabaseSchema = {
+  schemaVersion: CURRENT_SCHEMA_VERSION,
+  initializedAt: SEED_TIMESTAMP,
+  updatedAt: SEED_TIMESTAMP,
+  entities: {
+    rooms: SEED_ROOMS,
+    salesOrders: [],
+    salesOrderLines: [],
+    wipPrepItems: SEED_WIP_PREP_ITEMS,
+    weeklyPlans: [],
+    planAllocations: [],
+    productionActualEntries: [],
+    boardNotes: [],
+    customers: [],
+    products: [],
+  },
+};
+

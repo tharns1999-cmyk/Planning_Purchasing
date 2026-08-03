@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, beforeEach } from 'vitest';
-import { PlanningPage } from '../features/planning/PlanningPage';
+import { PlanningPage } from '@/features/production/planning/PlanningPage';
 import { plannerRepository } from '../services/plannerService';
 import { PlanStatus } from '../domain/types';
 

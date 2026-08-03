@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { PlanningQueuePanel } from '../features/planning/PlanningQueuePanel';
+import { PlanningQueuePanel } from '@/features/production/planning/PlanningQueuePanel';
 import { plannerRepository } from '../services/plannerService';
 import { SourceType } from '../domain/types';
 

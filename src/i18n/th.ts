@@ -5,6 +5,7 @@ export const THAI_TRANSLATIONS = {
     shortName: 'WPP Planner',
   },
   nav: {
+    dashboard: 'สรุปภาพรวมการผลิต',
     overview: 'ภาพรวม',
     orders: 'ใบสั่งซื้อ',
     planning: 'วางแผนการผลิต',

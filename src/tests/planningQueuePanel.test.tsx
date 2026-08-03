@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, beforeEach } from 'vitest';
-import { PlanningQueuePanel } from '../features/planning/PlanningQueuePanel';
+import { PlanningQueuePanel } from '@/features/production/planning/PlanningQueuePanel';
 import { plannerRepository } from '../services/plannerService';
 
 describe('Phase 3B — Planning Queue UI Read-Only Tests', () => {

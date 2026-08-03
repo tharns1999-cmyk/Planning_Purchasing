@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { OverviewPage } from '../features/overview/OverviewPage';
+import { OverviewPage } from '@/features/production/overview/OverviewPage';
 import { plannerRepository } from '../services/plannerService';
 
 describe('Phase 2A — Dashboard Page UI Tests', () => {

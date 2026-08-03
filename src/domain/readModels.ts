@@ -43,6 +43,10 @@ export interface OverviewMetricsSummary {
   dueSoonLines: OverviewLineItemRow[];
   overdueLines: OverviewLineItemRow[];
   shortfallRows: OverviewShortfallRow[];
+  totalActualProducedBoxQty: number;
+  totalOrderedBoxQty: number;
+  totalRemainingBoxQty: number;
+  completionRatePct: number;
 }
 
 /**
@@ -86,6 +90,26 @@ export function buildOverviewReadModel(
 
   const activePoCount = snapshot.entities.salesOrders.length;
   const totalPoLineCount = allLines.length;
+
+  // Calculate actual produced box quantity from FG Production Actuals
+  let totalActualProducedBoxQty = 0;
+  (snapshot.entities.productionActualEntries || []).forEach((e: ProductionActualEntry) => {
+    const alloc = snapshot.entities.planAllocations.find((a: PlanAllocation) => a.allocationId === e.allocationId);
+    if (alloc && alloc.sourceType === SourceType.FG) {
+      const boxVal = e.boxQty && e.boxQty > 0 ? e.boxQty : e.goodQty;
+      totalActualProducedBoxQty += boxVal;
+    }
+  });
+
+  const totalOrderedBoxQty = snapshot.entities.salesOrderLines.reduce(
+    (sum: number, line: SalesOrderLine) => sum + Math.max(0, line.orderedQty - (line.cancelledQty || 0)),
+    0
+  );
+  const totalRemainingBoxQty = Math.max(0, totalOrderedBoxQty - totalActualProducedBoxQty);
+  const completionRatePct =
+    totalOrderedBoxQty > 0
+      ? Math.min(100, Math.round((totalActualProducedBoxQty / totalOrderedBoxQty) * 100))
+      : 0;
 
   // Exact card predicates
   const unplannedLines = allLines.filter((l: OverviewLineItemRow) => l.remainingQty > 0);
@@ -132,5 +156,9 @@ export function buildOverviewReadModel(
     dueSoonLines,
     overdueLines,
     shortfallRows,
+    totalActualProducedBoxQty,
+    totalOrderedBoxQty,
+    totalRemainingBoxQty,
+    completionRatePct,
   };
 }

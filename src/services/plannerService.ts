@@ -1,3 +1,4 @@
-import { LocalStorageRepository } from './repositories/LocalStorageRepository';
+import { GasRepository } from './repositories/GasRepository';
 
-export const plannerRepository = new LocalStorageRepository();
+// Automatically uses Google Apps Script if 'google' is available, otherwise falls back to LocalStorage.
+export const plannerRepository = new GasRepository();

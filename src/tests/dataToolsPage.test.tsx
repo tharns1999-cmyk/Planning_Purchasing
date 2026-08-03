@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { LocalStorageRepository } from '@/services/repositories/LocalStorageRepository';
-import { SettingsPage } from '@/features/settings/SettingsPage';
+import { SettingsPage } from '@/features/production/settings/SettingsPage';
 
 describe('PHASE 4C — Data Tools Page Tests', () => {
   let repository: LocalStorageRepository;

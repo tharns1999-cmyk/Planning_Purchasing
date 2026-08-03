@@ -5,9 +5,14 @@ test.describe('Weekly Production Planner App Launch & Viewport Tests', () => {
     await page.setViewportSize({ width: 1366, height: 768 });
     await page.goto('/');
 
+    // Expand sidebar if collapsed
+    const expandBtn = page.getByRole('button', { name: 'ขยายเมนู' });
+    if (await expandBtn.isVisible()) {
+      await expandBtn.click();
+    }
+
     await expect(page).toHaveTitle(/ระบบวางแผนการผลิตรายสัปดาห์/);
-    await expect(page.getByRole('heading', { name: 'ระบบวางแผนการผลิตรายสัปดาห์' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'ภาพรวม' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'ภาพรวม', exact: true })).toBeVisible();
   });
 
   test('should navigate to Showcase route and display components', async ({ page }) => {

@@ -30,7 +30,7 @@ describe('Phase 1G — Screen Read Models Tests', () => {
     expect(summary.publishedPlanCount).toBe(0);
   });
 
-  it('2. getPlanningQueueData hides lines where remainingQty === 0', () => {
+  it('2. getPlanningQueueData returns lines where remainingQty === 0 with ESTIMATED_COMPLETE status', () => {
     // sol-1001-1 orderedQty = 500
     const draft = repository.createDraftPlan(monday);
     const planId = draft.plan!.id;
@@ -52,7 +52,8 @@ describe('Phase 1G — Screen Read Models Tests', () => {
     const queueData = repository.getPlanningQueueData('2026-07-20');
     const sol1Line = queueData.fgItems.find((i) => i.salesOrderLineId === 'sol-1001-1');
 
-    expect(sol1Line).toBeUndefined(); // Filtered out because remainingQty === 0
+    expect(sol1Line).toBeDefined();
+    expect(sol1Line!.planningStatus).toBe('ESTIMATED_COMPLETE');
   });
 
   it('3. getPlanningQueueData sorts URGENT lines before NORMAL lines, then by dueDate ascending', () => {

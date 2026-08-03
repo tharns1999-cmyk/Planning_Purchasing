@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect, beforeEach } from 'vitest';
-import { ActualsPage } from '../features/actuals/ActualsPage';
+import { ActualsPage } from '@/features/production/actuals/ActualsPage';
 import { plannerRepository } from '../services/plannerService';
 import { ActualEntryType, ProductionStatus } from '../domain/types';
 

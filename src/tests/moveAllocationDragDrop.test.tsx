@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { LocalStorageRepository } from '@/services/repositories/LocalStorageRepository';
-import { PlanningPage } from '@/features/planning/PlanningPage';
+import { PlanningPage } from '@/features/production/planning/PlanningPage';
 
 describe('PHASE 3D.1 — Move Allocation Card by Drag & Drop Tests', () => {
   let repository: LocalStorageRepository;

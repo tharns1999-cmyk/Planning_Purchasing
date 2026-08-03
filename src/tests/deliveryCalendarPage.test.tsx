@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { plannerRepository } from '@/services/plannerService';
-import { CalendarPage } from '@/features/calendar/CalendarPage';
+import { CalendarPage } from '@/features/production/calendar/CalendarPage';
 
 describe('PHASE 4D — Delivery Calendar Page Tests', () => {
   beforeEach(() => {

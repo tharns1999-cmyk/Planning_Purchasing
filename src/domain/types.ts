@@ -52,6 +52,10 @@ export interface SalesOrderLine {
   dueDate: string; // ISO Date YYYY-MM-DD
   priority: Priority;
   notes?: string;
+  packaging?: string;
+  completedQty?: number | string;
+  shortageQty?: number | string;
+  boxQty?: number | string;
 }
 
 export interface SalesOrder {
@@ -61,6 +65,7 @@ export interface SalesOrder {
   orderDate: string;
   note?: string;
   lines: SalesOrderLine[];
+  status?: ProductionStatus | string;
   createdAt: string;
   updatedAt: string;
 }
@@ -71,6 +76,7 @@ export interface WipPrepItem {
   itemType: SourceType.WIP | SourceType.PREP;
   itemCode?: string;
   itemName: string;
+  shortName?: string;
   defaultUnit: string;
   relatedProduct?: string;
   note?: string;
@@ -139,6 +145,7 @@ export interface ProductionActualEntry {
   reworkQty: number;
   shortfallQty: number;
   shortfallReason?: string;
+  boxQty?: number;
   recordedAt: string;
   recordedBy?: string;
 }
@@ -147,6 +154,7 @@ export interface CustomerMaster {
   customerId: string;
   customerCode: string;
   customerName: string;
+  shortName?: string;
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -156,8 +164,10 @@ export interface ProductMaster {
   productId: string;
   productCode: string;
   productName: string;
+  shortName?: string;
   defaultUnit: string;
   customerId?: string; // Links product to a customer (optional for legacy products)
+  estimatedYieldPerBatch?: number; // ค่าประมาณ FG ต่อ 1 ชุด (เช่น 6 กล่อง/ชุด)
   active: boolean;
   createdAt: string;
   updatedAt: string;

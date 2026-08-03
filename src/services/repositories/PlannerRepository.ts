@@ -20,11 +20,13 @@ import {
 export interface CreateCustomerInput {
   customerCode: string;
   customerName: string;
+  shortName?: string;
 }
 
 export interface UpdateCustomerInput {
   customerCode?: string;
   customerName?: string;
+  shortName?: string;
 }
 
 export interface CreateCustomerResult {
@@ -49,14 +51,18 @@ export interface CreateProductInput {
   customerId: string;
   productCode: string;
   productName: string;
+  shortName?: string;
   defaultUnit: string;
+  estimatedYieldPerBatch?: number;
 }
 
 export interface UpdateProductInput {
   customerId?: string;
   productCode?: string;
   productName?: string;
+  shortName?: string;
   defaultUnit?: string;
+  estimatedYieldPerBatch?: number;
 }
 
 
@@ -106,6 +112,35 @@ export interface SalesOrderWithLinesDetail {
 }
 
 export interface CreateSalesOrderResult {
+  success: boolean;
+  order?: SalesOrder;
+  errors?: string[];
+}
+
+export interface UpdateSalesOrderHeaderInput {
+  poNumber?: string;
+  customerName?: string;
+  receivedDate?: string;
+  priority?: Priority;
+  note?: string;
+}
+
+export interface UpdateSalesOrderLineItemInput {
+  id?: string; // If present, edit existing line; if omitted, create new line
+  productCode?: string;
+  productName: string;
+  orderedQty: number;
+  unit: string;
+  dueDate: string;
+  priority?: Priority;
+  notes?: string;
+  packaging?: string;
+  completedQty?: number | string;
+  shortageQty?: number | string;
+  boxQty?: number | string;
+}
+
+export interface UpdateSalesOrderResult {
   success: boolean;
   order?: SalesOrder;
   errors?: string[];
@@ -300,6 +335,7 @@ export interface AppendProductionActualInput {
   reworkQty: number;
   shortfallQty: number;
   shortfallReason?: string;
+  boxQty?: number;
   recordedBy?: string;
 }
 
@@ -315,6 +351,9 @@ export interface AllocationActualSummaryDetail {
   totalWasteQty: number;
   totalReworkQty: number;
   totalShortfallQty: number;
+  totalBoxQty?: number;
+  entriesCount: number;
+  hasActualRecord: boolean;
   remainingToProduce: number;
   status: ProductionStatus;
 }
@@ -326,6 +365,7 @@ export interface PlanningQueueFgItem {
   customerName: string;
   productCode: string;
   productName: string;
+  shortName?: string;
   orderedQty: number;
   plannedQty: number;
   remainingQty: number;
@@ -333,6 +373,7 @@ export interface PlanningQueueFgItem {
   dueDate: string;
   priority: Priority;
   dueStatus: DueStatus;
+  planningStatus: 'UNPLANNED' | 'PARTIAL' | 'ESTIMATED_COMPLETE';
 }
 
 export interface RecentShortfallItem {
@@ -358,6 +399,10 @@ export interface DashboardSummaryDetail {
   publishedPlanCount: number;
   inProgressActualCount: number;
   shortfallCount: number;
+  totalActualProducedBoxQty: number;
+  totalOrderedBoxQty: number;
+  totalRemainingBoxQty: number;
+  completionRatePct: number;
   urgentFgLines: PlanningQueueFgItem[];
   recentShortfalls: RecentShortfallItem[];
 }
@@ -406,6 +451,11 @@ export interface PlannerRepository {
   initialize(): void;
 
   /**
+   * Asynchronously initializes the repository (e.g. from a remote source).
+   */
+  initializeAsync(): Promise<void>;
+
+  /**
    * Returns a complete, decoupled deep-copy snapshot of the database schema.
    */
   getSnapshot(): DatabaseSchema;
@@ -414,6 +464,11 @@ export interface PlannerRepository {
    * Deterministically resets the database back to original seed data.
    */
   reset(): void;
+
+  /**
+   * Clears POs, FG allocations, WIP items, weekly plans, actuals, and notes while preserving Products and Customers.
+   */
+  clearOperationalData(): void;
 
   /**
    * Returns true if the database key exists and is valid.
@@ -614,6 +669,16 @@ export interface PlannerRepository {
   createProduct(input: CreateProductInput): CreateProductResult;
   updateProduct(productId: string, input: UpdateProductInput): UpdateProductResult;
   setProductActive(productId: string, active: boolean): SetProductActiveResult;
+
+  /**
+   * Sales Order Management Methods
+   */
+  updateSalesOrder(
+    orderId: string,
+    header: UpdateSalesOrderHeaderInput,
+    lines: UpdateSalesOrderLineItemInput[]
+  ): UpdateSalesOrderResult;
+  isLineAllocated(salesOrderLineId: string): boolean;
 }
 
 

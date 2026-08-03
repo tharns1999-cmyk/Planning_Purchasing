@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, beforeEach } from 'vitest';
-import { PlanningPage } from '../features/planning/PlanningPage';
+import { PlanningPage } from '@/features/production/planning/PlanningPage';
 import { plannerRepository } from '../services/plannerService';
 
 describe('Bug Fix — Duplicate R00 & Missing Create Draft Plan Button Tests', () => {

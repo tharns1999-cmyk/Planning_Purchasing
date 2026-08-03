@@ -2,8 +2,11 @@ import {
   PlannerRepository,
   CreateSalesOrderHeaderInput,
   CreateSalesOrderLineInput,
+  UpdateSalesOrderHeaderInput,
+  UpdateSalesOrderLineItemInput,
   SalesOrderWithLinesDetail,
   CreateSalesOrderResult,
+  UpdateSalesOrderResult,
   CreateWipPrepItemInput,
   UpdateWipPrepItemInput,
   CreateWipItemInput,
@@ -54,7 +57,7 @@ import {
   LOCAL_STORAGE_DB_KEY,
   CURRENT_SCHEMA_VERSION,
 } from '../databaseSchema';
-import { INITIAL_SEED_DATABASE, SEED_CUSTOMERS, SEED_PRODUCTS } from '../../data/seedData';
+import { INITIAL_SEED_DATABASE, EMPTY_DATABASE, SEED_CUSTOMERS, SEED_PRODUCTS, SEED_ROOMS } from '../../data/seedData';
 import {
   SalesOrder,
   SalesOrderLine,
@@ -136,6 +139,10 @@ export class LocalStorageRepository implements PlannerRepository {
     }
   }
 
+  public async initializeAsync(): Promise<void> {
+    this.initialize();
+  }
+
   public getSnapshot(): DatabaseSchema {
     if (!this.isInitialized()) {
       this.initialize();
@@ -167,6 +174,39 @@ export class LocalStorageRepository implements PlannerRepository {
       updatedAt: now,
     };
     localStorage.setItem(this.storageKey, JSON.stringify(resetDb));
+  }
+
+  public clearAllData(): void {
+    const now = this.clock.nowISO();
+    const emptyDb: DatabaseSchema = {
+      ...structuredClone(EMPTY_DATABASE),
+      initializedAt: now,
+      updatedAt: now,
+    };
+    localStorage.setItem(this.storageKey, JSON.stringify(emptyDb));
+  }
+
+  public clearOperationalData(): void {
+    const snapshot = this.getSnapshot();
+    const now = this.clock.nowISO();
+    const cleanDb: DatabaseSchema = {
+      schemaVersion: CURRENT_SCHEMA_VERSION,
+      initializedAt: snapshot.initializedAt || now,
+      updatedAt: now,
+      entities: {
+        rooms: snapshot.entities.rooms || structuredClone(SEED_ROOMS),
+        salesOrders: [],
+        salesOrderLines: [],
+        wipPrepItems: [],
+        weeklyPlans: [],
+        planAllocations: [],
+        productionActualEntries: [],
+        boardNotes: [],
+        customers: snapshot.entities.customers || [],
+        products: snapshot.entities.products || [],
+      },
+    };
+    localStorage.setItem(this.storageKey, JSON.stringify(cleanDb));
   }
 
   public importDatabase(data: unknown): { success: boolean; errors?: string[] } {
@@ -201,7 +241,7 @@ export class LocalStorageRepository implements PlannerRepository {
     if (missingOrInvalidKeys.length > 0) {
       return {
         success: false,
-        errors: [`ขาดข้อมูลโครงสร้างหลักหรือรูปแบบผิดพลาด: ${missingOrInvalidKeys.join(', ')}`],
+        errors: ['ขาดข้อมูลโครงสร้างหลักหรือรูปแบบผิดพลาด: ' + missingOrInvalidKeys.join(', ')],
       };
     }
 
@@ -213,7 +253,7 @@ export class LocalStorageRepository implements PlannerRepository {
     if (invalidProductRef) {
       return {
         success: false,
-        errors: [`รหัสลูกค้า '${invalidProductRef.customerId}' สำหรับสินค้า '${invalidProductRef.productCode}' ไม่มีในระบบ`],
+        errors: ["รหัสลูกค้า '" + invalidProductRef.customerId + "' สำหรับสินค้า '" + invalidProductRef.productCode + "' ไม่มีในระบบ"],
       };
     }
 
@@ -301,16 +341,16 @@ export class LocalStorageRepository implements PlannerRepository {
     } else {
       linesInput.forEach((line, index) => {
         if (!line.productName || line.productName.trim() === '') {
-          errors.push(`Line [${index}]: productName is required`);
+          errors.push('Line #' + (index + 1) + ': productName is required');
         }
         if (!Number.isFinite(line.orderedQty) || line.orderedQty <= 0) {
-          errors.push(`Line [${index}]: orderedQty must be a finite positive number (> 0)`);
+          errors.push('Line #' + (index + 1) + ': orderedQty must be a finite positive number (> 0)');
         }
         if (!line.unit || line.unit.trim() === '') {
-          errors.push(`Line [${index}]: unit is required`);
+          errors.push('Line #' + (index + 1) + ': unit is required');
         }
         if (!line.dueDate || !ISO_DATE_REGEX.test(line.dueDate.trim())) {
-          errors.push(`Line [${index}]: dueDate is required and must be YYYY-MM-DD ISO format`);
+          errors.push('Line #' + (index + 1) + ': dueDate is required and must be YYYY-MM-DD ISO format');
         }
       });
     }
@@ -323,7 +363,7 @@ export class LocalStorageRepository implements PlannerRepository {
         (existing) => existing.orderNo.trim().toLowerCase() === cleanPoNumber
       );
       if (duplicate) {
-        errors.push(`poNumber '${header.poNumber.trim()}' already exists (must be unique)`);
+        errors.push("poNumber '" + header.poNumber.trim() + "' already exists (must be unique)");
       }
     }
 
@@ -403,10 +443,10 @@ export class LocalStorageRepository implements PlannerRepository {
     let finalItemCode = input.itemCode?.trim();
     if (!finalItemCode) {
       let count = snapshot.entities.wipPrepItems.length + 1;
-      let candidate = `WIP-${count.toString().padStart(4, '0')}`;
+      let candidate = 'WIP-' + count.toString().padStart(4, '0');
       while (snapshot.entities.wipPrepItems.some((i) => i.itemCode && i.itemCode.toLowerCase() === candidate.toLowerCase())) {
         count++;
-        candidate = `WIP-${count.toString().padStart(4, '0')}`;
+        candidate = 'WIP-' + count.toString().padStart(4, '0');
       }
       finalItemCode = candidate;
     } else {
@@ -415,7 +455,7 @@ export class LocalStorageRepository implements PlannerRepository {
         (existing) => existing.itemCode && existing.itemCode.trim().toLowerCase() === cleanCode
       );
       if (duplicate) {
-        errors.push(`itemCode '${finalItemCode}' already exists (must be unique)`);
+        errors.push("itemCode '" + finalItemCode + "' already exists (must be unique)");
       }
     }
 
@@ -570,8 +610,8 @@ export class LocalStorageRepository implements PlannerRepository {
 
   public listWeekPlans(weekStart: string): WeeklyPlan[] {
     const snapshot = this.getSnapshot();
-    const cleanWeek = weekStart.trim();
-    return snapshot.entities.weeklyPlans.filter((p) => p.weekStart === cleanWeek);
+    const cleanWeek = weekStart.trim().substring(0, 10);
+    return snapshot.entities.weeklyPlans.filter((p) => p.weekStart.substring(0, 10) === cleanWeek);
   }
 
   public getActivePlanForWeek(weekStart: string): WeeklyPlan | null {
@@ -775,7 +815,7 @@ export class LocalStorageRepository implements PlannerRepository {
       }
 
       if (outputQty !== undefined && Number.isFinite(outputQty) && outputQty > 0) {
-        const activePlannedQty = calculateActivePlannedQtyForLine(line.id, snapshot.entities.weeklyPlans);
+        const activePlannedQty = calculateActivePlannedQtyForLine(line.id, snapshot.entities.weeklyPlans, snapshot.entities.productionActualEntries);
         const remainingQty = calculateRemainingQty(line.orderedQty, line.cancelledQty, activePlannedQty);
 
         if (outputQty > remainingQty) {
@@ -1201,7 +1241,10 @@ export class LocalStorageRepository implements PlannerRepository {
       errors.push('entryType must be PARTIAL or FINAL');
     }
 
-    const { goodQty, wasteQty, reworkQty, shortfallQty } = input;
+    const goodQty = input.goodQty;
+    const wasteQty = input.wasteQty ?? 0;
+    const reworkQty = input.reworkQty ?? 0;
+    const shortfallQty = input.shortfallQty ?? 0;
     if (
       !Number.isFinite(goodQty) || goodQty < 0 ||
       !Number.isFinite(wasteQty) || wasteQty < 0 ||
@@ -1242,6 +1285,7 @@ export class LocalStorageRepository implements PlannerRepository {
       reworkQty,
       shortfallQty,
       shortfallReason: input.shortfallReason?.trim() || undefined,
+      boxQty: input.boxQty && input.boxQty > 0 ? input.boxQty : undefined,
       recordedAt: now,
       recordedBy: input.recordedBy?.trim() || undefined,
     };
@@ -1258,6 +1302,58 @@ export class LocalStorageRepository implements PlannerRepository {
     if (planAlloc) {
       planAlloc.status = alloc.status;
       planAlloc.updatedAt = now;
+    }
+
+    // Step 2 & 3: Auto-Reconciliation for SalesOrderLine and SalesOrder
+    if (alloc.salesOrderLineId) {
+      const line = snapshot.entities.salesOrderLines.find((l) => l.id === alloc.salesOrderLineId);
+      if (line) {
+        // Calculate PO item deduction: prefer submitted boxQty if > 0, fallback to goodQty
+        const qtyDeduction = input.boxQty && input.boxQty > 0 ? input.boxQty : goodQty;
+
+        const currentCompletedNum =
+          typeof line.completedQty === 'number'
+            ? line.completedQty
+            : typeof line.completedQty === 'string'
+            ? parseFloat(line.completedQty) || 0
+            : 0;
+
+        const newCompleted = currentCompletedNum + qtyDeduction;
+        line.completedQty = newCompleted;
+
+        if (input.boxQty && input.boxQty > 0) {
+          const currentBoxNum =
+            typeof line.boxQty === 'number'
+              ? line.boxQty
+              : typeof line.boxQty === 'string'
+              ? parseFloat(line.boxQty) || 0
+              : 0;
+          line.boxQty = currentBoxNum + input.boxQty;
+        }
+
+        const effectiveTarget = Math.max(0, line.orderedQty - (line.cancelledQty || 0));
+        line.shortageQty = Math.max(0, effectiveTarget - newCompleted);
+
+        // Step 3: Check SalesOrder completion
+        const order = snapshot.entities.salesOrders.find((o) => o.id === line.orderId);
+        if (order) {
+          const orderLines = snapshot.entities.salesOrderLines.filter((l) => l.orderId === order.id);
+          const allCompleted = orderLines.every((l) => {
+            const lComp =
+              typeof l.completedQty === 'number'
+                ? l.completedQty
+                : typeof l.completedQty === 'string'
+                ? parseFloat(l.completedQty) || 0
+                : 0;
+            return lComp >= Math.max(0, l.orderedQty - (l.cancelledQty || 0));
+          });
+
+          if (allCompleted && orderLines.length > 0) {
+            order.status = ProductionStatus.COMPLETED;
+            order.updatedAt = now;
+          }
+        }
+      }
     }
 
     plan.updatedAt = now;
@@ -1284,6 +1380,9 @@ export class LocalStorageRepository implements PlannerRepository {
     const totalWasteQty = entries.reduce((sum, e) => sum + e.wasteQty, 0);
     const totalReworkQty = entries.reduce((sum, e) => sum + e.reworkQty, 0);
     const totalShortfallQty = entries.reduce((sum, e) => sum + e.shortfallQty, 0);
+    const totalBoxQty = entries.reduce((sum, e) => sum + (e.boxQty || 0), 0);
+    const entriesCount = entries.length;
+    const hasActualRecord = entriesCount > 0;
     const remainingToProduce = Math.max(0, plannedQty - totalGoodQty);
     const status = deriveProductionStatus(entries, plannedQty);
 
@@ -1293,6 +1392,9 @@ export class LocalStorageRepository implements PlannerRepository {
       totalWasteQty,
       totalReworkQty,
       totalShortfallQty,
+      totalBoxQty,
+      entriesCount,
+      hasActualRecord,
       remainingToProduce,
       status,
     };
@@ -1301,21 +1403,62 @@ export class LocalStorageRepository implements PlannerRepository {
   public getPlanningQueueData(referenceDate?: string): PlanningQueueDataDetail {
     const snapshot = this.getSnapshot();
     const refDate = referenceDate || this.clock.nowISO().slice(0, 10);
+    const actualEntries = snapshot.entities.productionActualEntries;
 
     const fgItems: PlanningQueueFgItem[] = snapshot.entities.salesOrderLines
       .map((line) => {
         const order = snapshot.entities.salesOrders.find((o) => o.id === line.orderId);
-        const activePlannedQty = calculateActivePlannedQtyForLine(line.id, snapshot.entities.weeklyPlans);
+        const activePlannedQty = calculateActivePlannedQtyForLine(line.id, snapshot.entities.weeklyPlans, actualEntries);
         const remainingQty = calculateRemainingQty(line.orderedQty, line.cancelledQty, activePlannedQty);
         const dueStatus = getDueStatus(line.dueDate, remainingQty, refDate);
+        const prodMatch = (snapshot.entities.products || []).find((p) => p.productCode === line.skuCode || p.productName === line.skuName);
+
+        // Calculate planningStatus for batch-based planning
+        const hasAnyAllocation = activePlannedQty > 0;
+        let planningStatus: 'UNPLANNED' | 'PARTIAL' | 'ESTIMATED_COMPLETE' = 'UNPLANNED';
+        if (hasAnyAllocation && remainingQty > 0) planningStatus = 'PARTIAL';
+        else if (hasAnyAllocation && remainingQty <= 0) planningStatus = 'ESTIMATED_COMPLETE';
+
+        const customers = snapshot.entities.customers || [];
+        const rawTarget = order?.customerName || '';
+        let matchedCustomer = undefined;
+        if (rawTarget) {
+          const clean = rawTarget.trim().toLowerCase();
+          matchedCustomer = customers.find(
+            (c) =>
+              c.customerName.trim().toLowerCase() === clean ||
+              (c.shortName && c.shortName.trim().toLowerCase() === clean) ||
+              c.customerCode.trim().toLowerCase() === clean ||
+              c.customerId.trim().toLowerCase() === clean
+          );
+          if (!matchedCustomer) {
+            matchedCustomer = customers.find(
+              (c) =>
+                c.customerName.trim().toLowerCase().includes(clean) ||
+                clean.includes(c.customerName.trim().toLowerCase()) ||
+                (c.shortName && c.shortName.trim().toLowerCase().includes(clean)) ||
+                (c.shortName && clean.includes(c.shortName.trim().toLowerCase()))
+            );
+          }
+        }
+        if (!matchedCustomer && prodMatch?.customerId) {
+          const cleanProdCustId = String(prodMatch.customerId).trim().toLowerCase();
+          matchedCustomer = customers.find(
+            (c) =>
+              c.customerId.toLowerCase() === cleanProdCustId ||
+              c.customerCode.toLowerCase() === cleanProdCustId
+          );
+        }
+        const resolvedCustomerName = matchedCustomer?.shortName || matchedCustomer?.customerName || order?.customerName || '';
 
         return {
           salesOrderId: line.orderId,
           salesOrderLineId: line.id,
-          poNumber: order ? order.orderNo : '',
-          customerName: order ? order.customerName : '',
-          productCode: line.skuCode,
-          productName: line.skuName,
+          poNumber: order ? String(order.orderNo || '') : '',
+          customerName: resolvedCustomerName,
+          productCode: String(line.skuCode || ''),
+          productName: String(line.skuName || ''),
+          shortName: prodMatch?.shortName || undefined,
           orderedQty: line.orderedQty,
           plannedQty: activePlannedQty,
           remainingQty,
@@ -1323,14 +1466,23 @@ export class LocalStorageRepository implements PlannerRepository {
           dueDate: line.dueDate,
           priority: line.priority,
           dueStatus,
+          planningStatus,
         };
       })
-      .filter((item) => item.remainingQty > 0)
+      .filter((item) => {
+        // Keep items that have remaining qty OR are estimated complete (for toggle visibility)
+        const netOrderQty = item.orderedQty;
+        return netOrderQty > 0;
+      })
       .sort((a, b) => {
-        // 1. URGENT priority comes first
+        // 1. UNPLANNED/PARTIAL before ESTIMATED_COMPLETE
+        const statusOrder: Record<string, number> = { UNPLANNED: 0, PARTIAL: 1, ESTIMATED_COMPLETE: 2 };
+        const statusDiff = (statusOrder[a.planningStatus] ?? 0) - (statusOrder[b.planningStatus] ?? 0);
+        if (statusDiff !== 0) return statusDiff;
+        // 2. URGENT priority comes first
         if (a.priority === Priority.URGENT && b.priority !== Priority.URGENT) return -1;
         if (a.priority !== Priority.URGENT && b.priority === Priority.URGENT) return 1;
-        // 2. Earliest dueDate comes first
+        // 3. Earliest dueDate comes first
         return a.dueDate.localeCompare(b.dueDate);
       });
 
@@ -1412,6 +1564,25 @@ export class LocalStorageRepository implements PlannerRepository {
 
     const urgentFgLines = queueData.fgItems.filter((i) => i.priority === Priority.URGENT);
 
+    let totalActualProducedBoxQty = 0;
+    (snapshot.entities.productionActualEntries || []).forEach((e) => {
+      const alloc = snapshot.entities.planAllocations.find((a) => a.allocationId === e.allocationId);
+      if (alloc && alloc.sourceType === SourceType.FG) {
+        const boxVal = e.boxQty && e.boxQty > 0 ? e.boxQty : e.goodQty;
+        totalActualProducedBoxQty += boxVal;
+      }
+    });
+
+    const totalOrderedBoxQty = snapshot.entities.salesOrderLines.reduce(
+      (sum, line) => sum + Math.max(0, line.orderedQty - (line.cancelledQty || 0)),
+      0
+    );
+    const totalRemainingBoxQty = Math.max(0, totalOrderedBoxQty - totalActualProducedBoxQty);
+    const completionRatePct =
+      totalOrderedBoxQty > 0
+        ? Math.min(100, Math.round((totalActualProducedBoxQty / totalOrderedBoxQty) * 100))
+        : 0;
+
     return {
       activePoCount,
       totalPoLineCount,
@@ -1423,6 +1594,10 @@ export class LocalStorageRepository implements PlannerRepository {
       publishedPlanCount,
       inProgressActualCount,
       shortfallCount,
+      totalActualProducedBoxQty,
+      totalOrderedBoxQty,
+      totalRemainingBoxQty,
+      completionRatePct,
       urgentFgLines,
       recentShortfalls,
     };
@@ -1642,6 +1817,9 @@ export class LocalStorageRepository implements PlannerRepository {
         totalWasteQty: 0,
         totalReworkQty: 0,
         totalShortfallQty: 0,
+        totalBoxQty: 0,
+        entriesCount: 0,
+        hasActualRecord: false,
         remainingToProduce: alloc.plannedQty,
         status: ProductionStatus.NOT_STARTED,
       };
@@ -1693,7 +1871,7 @@ export class LocalStorageRepository implements PlannerRepository {
     if (!snapshot.entities.customers) snapshot.entities.customers = [];
 
     if (code && snapshot.entities.customers.some((c) => c.customerCode.toLowerCase() === code.toLowerCase())) {
-      errors.push(`รหัสลูกค้า '${code}' มีในระบบแล้ว`);
+      errors.push('รหัสลูกค้า "' + code + '" มีในระบบแล้ว');
     }
 
     if (errors.length > 0) return { success: false, errors };
@@ -1703,6 +1881,7 @@ export class LocalStorageRepository implements PlannerRepository {
       customerId: this.idGenerator.generateId('cust'),
       customerCode: code,
       customerName: name,
+      shortName: input.shortName?.trim() || undefined,
       active: true,
       createdAt: now,
       updatedAt: now,
@@ -1735,7 +1914,7 @@ export class LocalStorageRepository implements PlannerRepository {
         (c) => c.customerId !== customerId && c.customerCode.toLowerCase() === newCode.toLowerCase()
       )
     ) {
-      errors.push(`รหัสลูกค้า '${newCode}' มีในระบบแล้ว`);
+      errors.push('รหัสลูกค้า "' + newCode + '" มีในระบบแล้ว');
     }
 
     if (errors.length > 0) return { success: false, errors };
@@ -1743,6 +1922,9 @@ export class LocalStorageRepository implements PlannerRepository {
     const now = this.clock.nowISO();
     cust.customerCode = newCode;
     cust.customerName = newName;
+    if (input.shortName !== undefined) {
+      cust.shortName = input.shortName.trim() || undefined;
+    }
     cust.updatedAt = now;
 
     snapshot.updatedAt = now;
@@ -1795,14 +1977,9 @@ export class LocalStorageRepository implements PlannerRepository {
     if (!name) errors.push('กรุณากรอกชื่อสินค้า');
     if (!unit) errors.push('กรุณากรอกหน่วยเริ่มต้น');
 
-    const snapshot = this.getSnapshot();
-    if (!snapshot.entities.products) snapshot.entities.products = [];
-
-    if (code && snapshot.entities.products.some((p) => p.productCode.toLowerCase() === code.toLowerCase())) {
-      errors.push(`รหัสสินค้า '${code}' มีในระบบแล้ว`);
+    if (errors.length > 0) {
+      return { success: false, errors };
     }
-
-    if (errors.length > 0) return { success: false, errors };
 
     const now = this.clock.nowISO();
     const newProduct: ProductMaster = {
@@ -1810,12 +1987,16 @@ export class LocalStorageRepository implements PlannerRepository {
       customerId: custId,
       productCode: code,
       productName: name,
+      shortName: input.shortName?.trim() || undefined,
       defaultUnit: unit,
+      estimatedYieldPerBatch: input.estimatedYieldPerBatch && Number.isFinite(input.estimatedYieldPerBatch) && input.estimatedYieldPerBatch > 0 ? input.estimatedYieldPerBatch : undefined,
       active: true,
       createdAt: now,
       updatedAt: now,
     };
 
+    const snapshot = this.getSnapshot();
+    if (!snapshot.entities.products) snapshot.entities.products = [];
     snapshot.entities.products.push(newProduct);
     snapshot.updatedAt = now;
     localStorage.setItem(this.storageKey, JSON.stringify(snapshot));
@@ -1847,7 +2028,7 @@ export class LocalStorageRepository implements PlannerRepository {
         (p) => p.productId !== productId && p.productCode.toLowerCase() === newCode.toLowerCase()
       )
     ) {
-      errors.push(`รหัสสินค้า '${newCode}' มีในระบบแล้ว`);
+      errors.push('รหัสสินค้า "' + newCode + '" มีในระบบแล้ว');
     }
 
     if (errors.length > 0) return { success: false, errors };
@@ -1856,7 +2037,13 @@ export class LocalStorageRepository implements PlannerRepository {
     prod.customerId = newCustId;
     prod.productCode = newCode;
     prod.productName = newName;
+    if (input.shortName !== undefined) {
+      prod.shortName = input.shortName.trim() || undefined;
+    }
     prod.defaultUnit = newUnit;
+    if (input.estimatedYieldPerBatch !== undefined) {
+      prod.estimatedYieldPerBatch = Number.isFinite(input.estimatedYieldPerBatch) && input.estimatedYieldPerBatch > 0 ? input.estimatedYieldPerBatch : undefined;
+    }
     prod.updatedAt = now;
 
     snapshot.updatedAt = now;
@@ -1864,7 +2051,6 @@ export class LocalStorageRepository implements PlannerRepository {
 
     return { success: true, product: prod };
   }
-
 
   public setProductActive(productId: string, active: boolean): SetProductActiveResult {
     const snapshot = this.getSnapshot();
@@ -1881,6 +2067,127 @@ export class LocalStorageRepository implements PlannerRepository {
     localStorage.setItem(this.storageKey, JSON.stringify(snapshot));
 
     return { success: true, product: prod };
+  }
+
+  /**
+   * Helper to check if a SalesOrderLine has allocations on the board
+   */
+  public isLineAllocated(salesOrderLineId: string): boolean {
+    const snapshot = this.getSnapshot();
+    return snapshot.entities.weeklyPlans.some((plan) =>
+      plan.allocations.some((alloc) => alloc.salesOrderLineId === salesOrderLineId)
+    );
+  }
+
+  /**
+   * Updates PO Header and Lines with Data Safeguard rule against deleting allocated lines.
+   */
+  public updateSalesOrder(
+    orderId: string,
+    header: UpdateSalesOrderHeaderInput,
+    linesInput: UpdateSalesOrderLineItemInput[]
+  ): UpdateSalesOrderResult {
+    const snapshot = this.getSnapshot();
+    const order = snapshot.entities.salesOrders.find((o) => o.id === orderId);
+    if (!order) {
+      return { success: false, errors: [`SalesOrder with id '${orderId}' not found`] };
+    }
+
+    const errors: string[] = [];
+
+    // Header validation
+    if (header.poNumber !== undefined && !header.poNumber.trim()) {
+      errors.push('กรุณากรอกเลขที่ PO');
+    }
+    if (header.customerName !== undefined && !header.customerName.trim()) {
+      errors.push('กรุณากรอกชื่อลูกค้า');
+    }
+
+    if (errors.length > 0) return { success: false, errors };
+
+    // Check Data Safeguard Rule for deleted lines
+    const existingLines = snapshot.entities.salesOrderLines.filter((l) => l.orderId === orderId);
+    const inputLineIds = new Set(linesInput.map((l) => l.id).filter(Boolean));
+
+    for (const existingLine of existingLines) {
+      if (!inputLineIds.has(existingLine.id)) {
+        if (this.isLineAllocated(existingLine.id)) {
+          errors.push('ไม่สามารถลบรายการ "' + existingLine.skuName + '" ได้ เนื่องจากถูกวางแผนลงบอร์ดแล้ว');
+        }
+      }
+    }
+
+    if (errors.length > 0) return { success: false, errors };
+
+    const now = this.clock.nowISO();
+
+    // Update Order Header
+    if (header.poNumber !== undefined) order.orderNo = header.poNumber.trim();
+    if (header.customerName !== undefined) order.customerName = header.customerName.trim();
+    if (header.receivedDate !== undefined) order.orderDate = header.receivedDate;
+    if (header.note !== undefined) order.note = header.note.trim() || undefined;
+    order.updatedAt = now;
+
+    // Process deleted lines
+    for (const existingLine of existingLines) {
+      if (!inputLineIds.has(existingLine.id)) {
+        snapshot.entities.salesOrderLines = snapshot.entities.salesOrderLines.filter(
+          (l) => l.id !== existingLine.id
+        );
+      }
+    }
+
+    // Process update / insert lines
+    const finalOrderLines: SalesOrderLine[] = [];
+
+    for (const lineIn of linesInput) {
+      if (lineIn.id) {
+        // Edit existing line
+        const targetLine = snapshot.entities.salesOrderLines.find((l) => l.id === lineIn.id);
+        if (targetLine) {
+          if (lineIn.productCode !== undefined) targetLine.skuCode = lineIn.productCode.trim();
+          targetLine.skuName = lineIn.productName.trim();
+          targetLine.orderedQty = lineIn.orderedQty;
+          targetLine.unit = lineIn.unit.trim();
+          targetLine.dueDate = lineIn.dueDate;
+          if (lineIn.priority) targetLine.priority = lineIn.priority;
+          if (lineIn.notes !== undefined) targetLine.notes = lineIn.notes.trim() || undefined;
+          if (lineIn.packaging !== undefined) targetLine.packaging = lineIn.packaging.trim() || undefined;
+          if (lineIn.completedQty !== undefined) targetLine.completedQty = lineIn.completedQty;
+          if (lineIn.shortageQty !== undefined) targetLine.shortageQty = lineIn.shortageQty;
+          if (lineIn.boxQty !== undefined) targetLine.boxQty = lineIn.boxQty;
+
+          finalOrderLines.push(targetLine);
+        }
+      } else {
+        // Add new line
+        const newLineId = this.idGenerator.generateId('line');
+        const newLine: SalesOrderLine = {
+          id: newLineId,
+          orderId,
+          skuCode: lineIn.productCode?.trim() || '',
+          skuName: lineIn.productName.trim(),
+          orderedQty: lineIn.orderedQty,
+          cancelledQty: 0,
+          unit: lineIn.unit.trim(),
+          dueDate: lineIn.dueDate,
+          priority: lineIn.priority || header.priority || Priority.NORMAL,
+          notes: lineIn.notes?.trim() || undefined,
+          packaging: lineIn.packaging?.trim() || undefined,
+          completedQty: lineIn.completedQty ?? 0,
+          shortageQty: lineIn.shortageQty ?? lineIn.orderedQty,
+          boxQty: lineIn.boxQty ?? undefined,
+        };
+        snapshot.entities.salesOrderLines.push(newLine);
+        finalOrderLines.push(newLine);
+      }
+    }
+
+    order.lines = finalOrderLines;
+    snapshot.updatedAt = now;
+    localStorage.setItem(this.storageKey, JSON.stringify(snapshot));
+
+    return { success: true, order };
   }
 }
 
