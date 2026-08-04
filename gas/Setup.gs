@@ -67,6 +67,7 @@ const PURCHASING_SHEET_NAMES = {
   DEFECT_MATRIX: 'DB_DefectMatrix',
   RECEIVING_RECORDS: 'DB_ReceivingRecords',
   ISSUE_LOGS: 'DB_IssueLogs',
+  DEFECT_CATEGORIES: 'DB_DefectCategories',
 };
 
 /**
@@ -117,7 +118,25 @@ function setupPurchasingDatabase() {
     matrixSheet.getRange(2, 1, seedMatrix.length, matrixHeaders.length).setValues(seedMatrix);
   }
 
-  // 4. DB_ReceivingRecords Sheet
+  // 4. DB_DefectCategories Sheet
+  let defectCatSheet = ss.getSheetByName(PURCHASING_SHEET_NAMES.DEFECT_CATEGORIES);
+  if (!defectCatSheet) {
+    defectCatSheet = ss.insertSheet(PURCHASING_SHEET_NAMES.DEFECT_CATEGORIES);
+  }
+  const defectCatHeaders = ['id', 'name', 'description', 'isActive'];
+  setupPurchasingSheetHeaders(defectCatSheet, defectCatHeaders, '#e11d48');
+
+  if (defectCatSheet.getLastRow() <= 1) {
+    const seedDefectCats = [
+      ['DEF-01', 'สิ่งแปลกปลอม (Foreign Objects)', 'พบเศษหิน ไม้ แมลง หรือสิ่งแปลกปลอมในวัตถุดิบ', true],
+      ['DEF-02', 'กายภาพ/สี/กลิ่น (Physical/Color/Odor)', 'สีเพี้ยน กลิ่นหืน เน่าเสีย หรือผิดปกติ', true],
+      ['DEF-03', 'น้ำหนัก/บรรจุภัณฑ์ (Weight/Packaging)', 'น้ำหนักขาด บรรจุภัณฑ์ฉีกขาด หรือชำรุด', true],
+      ['DEF-04', 'อุณหภูมิ/ความชื้น (Temp/Moisture)', 'อุณหภูมิขนส่งสูงเกินเกณฑ์ หรือความชื้นสูง', true],
+    ];
+    defectCatSheet.getRange(2, 1, seedDefectCats.length, defectCatHeaders.length).setValues(seedDefectCats);
+  }
+
+  // 5. DB_ReceivingRecords Sheet
   let recSheet = ss.getSheetByName(PURCHASING_SHEET_NAMES.RECEIVING_RECORDS);
   if (!recSheet) {
     recSheet = ss.insertSheet(PURCHASING_SHEET_NAMES.RECEIVING_RECORDS);
@@ -130,7 +149,7 @@ function setupPurchasingDatabase() {
   ];
   setupPurchasingSheetHeaders(recSheet, recHeaders, '#059669');
 
-  // 5. DB_IssueLogs Sheet
+  // 6. DB_IssueLogs Sheet
   let issueSheet = ss.getSheetByName(PURCHASING_SHEET_NAMES.ISSUE_LOGS);
   if (!issueSheet) {
     issueSheet = ss.insertSheet(PURCHASING_SHEET_NAMES.ISSUE_LOGS);
@@ -141,6 +160,17 @@ function setupPurchasingDatabase() {
     'defectCategory', 'problemsFound', 'correctiveAction', 'status', 'createdAt'
   ];
   setupPurchasingSheetHeaders(issueSheet, issueHeaders, '#dc2626');
+
+  // 7. Audit_Logs Sheet (Audit Trail)
+  let auditSheet = ss.getSheetByName('Audit_Logs');
+  if (!auditSheet) {
+    auditSheet = ss.insertSheet('Audit_Logs');
+  }
+  const auditHeaders = [
+    'Timestamp', 'Action', 'Module', 'Record ID / Target',
+    'Action Details', 'Client IP', 'Device & OS', 'User Session'
+  ];
+  setupPurchasingSheetHeaders(auditSheet, auditHeaders, '#0f172a');
 
   try {
     SpreadsheetApp.getActiveSpreadsheet().toast('✅ ตั้งค่าตารางฐานข้อมูลระบบจัดซื้อสำเร็จ!', 'Purchasing System', 5);

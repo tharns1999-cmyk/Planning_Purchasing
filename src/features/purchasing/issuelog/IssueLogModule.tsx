@@ -21,6 +21,7 @@ import {
   Supplier,
   RMItem,
   IssueLogRecord,
+  DefectCategoryItem,
   DEFECT_CATEGORIES,
 } from '@/services/DefectMatrixService';
 
@@ -47,6 +48,8 @@ interface IssueLogModuleProps {
   prefillData: PrefillIssueData | null;
   suppliers?: Supplier[];
   rmItems?: RMItem[];
+  defectCategories?: DefectCategoryItem[];
+  onlyModal?: boolean;
 }
 
 export const IssueLogModule: React.FC<IssueLogModuleProps> = ({
@@ -61,6 +64,8 @@ export const IssueLogModule: React.FC<IssueLogModuleProps> = ({
   prefillData,
   suppliers = [],
   rmItems = [],
+  defectCategories = [],
+  onlyModal = false,
 }) => {
   const getTodayDateString = (): string => {
     return new Date().toISOString().split('T')[0] || '';
@@ -184,14 +189,20 @@ export const IssueLogModule: React.FC<IssueLogModuleProps> = ({
     [availableRMsForSupplier]
   );
 
-  const defectCategorySelectOptions: SelectOption[] = useMemo(
-    () =>
-      DEFECT_CATEGORIES.map((cat) => ({
-        value: cat,
-        label: cat,
-      })),
-    []
-  );
+  const defectCategorySelectOptions: SelectOption[] = useMemo(() => {
+    if (defectCategories && defectCategories.length > 0) {
+      const activeCats = defectCategories.filter((c) => c.isActive !== false);
+      return activeCats.map((cat) => ({
+        value: cat.name,
+        label: cat.name,
+        subtitle: cat.description || undefined,
+      }));
+    }
+    return DEFECT_CATEGORIES.map((cat) => ({
+      value: cat,
+      label: cat,
+    }));
+  }, [defectCategories]);
 
   // Form Submit Handler
   const handleSaveIssueLog = (e?: React.FormEvent | React.MouseEvent) => {
@@ -270,22 +281,42 @@ export const IssueLogModule: React.FC<IssueLogModuleProps> = ({
     return filteredRecords.slice(start, start + pageSize);
   }, [filteredRecords, currentPage, pageSize]);
 
+  if (onlyModal && !isModalOpen) return null;
+
   return (
-    <div className="space-y-8">
-      {/* Header Banner & Manual Add Button */}
-      <div className="bg-gradient-to-r from-rose-900 via-rose-800 to-slate-900 rounded-2xl p-6 text-white shadow-md flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="p-3 rounded-2xl bg-rose-500/20 text-rose-300 border border-rose-500/30">
-            <AlertOctagon className="w-8 h-8" />
+    <div className={onlyModal ? '' : 'space-y-6'}>
+      {!onlyModal && (
+        <>
+          {/* Top Header Card: Stat Badges + Add Issue Button */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-5 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+        {/* Stat Badges */}
+        <div className="flex items-center gap-3 overflow-x-auto custom-scrollbar">
+          <div className="flex items-center gap-2.5 bg-slate-50 px-3.5 py-2 rounded-xl border border-slate-200/70 shrink-0">
+            <AlertOctagon className="w-4 h-4 text-slate-500" />
+            <span className="text-xs text-slate-600 font-medium">ปัญหาทั้งหมด</span>
+            <span className="px-2 py-0.5 rounded-full bg-slate-200/70 text-slate-800 text-xs font-mono font-semibold">
+              {issueLogRecords.length}
+            </span>
           </div>
-          <div>
-            <h2 className="text-2xl font-normal">ทะเบียนติดตามปัญหาคุณภาพ (QC Issue Log)</h2>
-            <p className="text-sm text-rose-200 mt-1">
-              อ้างอิงแบบฟอร์ม FM-PC-28 R00 และ FM-PC-20 R00 บันทึกและติดตามแก้ไขปัญหาวัตถุดิบ
-            </p>
+
+          <div className="flex items-center gap-2.5 bg-rose-50 px-3.5 py-2 rounded-xl border border-rose-200/80 shrink-0">
+            <AlertTriangle className="w-4 h-4 text-rose-600" />
+            <span className="text-xs text-rose-800 font-medium">รอดำเนินการ</span>
+            <span className="px-2 py-0.5 rounded-full bg-rose-200/80 text-rose-900 text-xs font-mono font-bold">
+              {issueLogRecords.filter(r => r.status === 'Open' || r.status === 'In Progress').length}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2.5 bg-emerald-50 px-3.5 py-2 rounded-xl border border-emerald-200/80 shrink-0">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <span className="text-xs text-emerald-800 font-medium">แก้ไขเรียบร้อย</span>
+            <span className="px-2 py-0.5 rounded-full bg-emerald-200/80 text-emerald-900 text-xs font-mono font-bold">
+              {issueLogRecords.filter(r => r.status === 'Resolved').length}
+            </span>
           </div>
         </div>
 
+        {/* Action Button */}
         <button
           type="button"
           onClick={() => {
@@ -293,70 +324,84 @@ export const IssueLogModule: React.FC<IssueLogModuleProps> = ({
               onOpenManualModal();
             }
           }}
-          className="inline-flex items-center gap-2 px-5 py-2.5 bg-rose-600 hover:bg-rose-500 active:bg-rose-700 text-white font-normal text-base rounded-xl shadow-lg transition-all cursor-pointer"
+          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-medium text-xs rounded-xl shadow-xs transition-all cursor-pointer whitespace-nowrap"
         >
-          <Plus className="w-4 h-4" />
-          บันทึกเคสใหม่ (Manual Input)
+          <span className="text-xs">➕</span>
+          <span>บันทึกเคสปัญหาใหม่</span>
         </button>
       </div>
 
       {/* Main Issue Log Table Card */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        {/* Table Controls */}
-        <div className="p-6 border-b border-slate-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div>
-            <h3 className="text-lg font-normal text-slate-900">
-              รายการปัญหาคุณภาพทั้งหมด ({filteredRecords.length} รายการ)
-            </h3>
-            <p className="text-sm text-slate-500 mt-0.5">
-              ติดตามประวัติข้อร้องเรียนและการดำเนินการแก้ไขร่วมกับ Supplier
-            </p>
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+        {/* Table Controls Header */}
+        <div className="p-4 sm:px-5 sm:py-4 border-b border-slate-100 bg-white flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1.5 bg-rose-50 text-rose-600 rounded-lg text-sm">
+              🚨
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">
+                รายการติดตามปัญหาคุณภาพ (QC Issue Log)
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                บันทึกและติดตามเคสข้อร้องเรียนคุณภาพวัตถุดิบ
+              </p>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
             {/* Search */}
-            <div className="relative flex-1 md:w-64">
-              <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+            <div className="relative flex-1 sm:w-64">
+              <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="ค้นหา Bill No, Supplier, ปัญหา..."
-                className="w-full h-9 pl-9 pr-3.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-normal text-slate-800 focus:bg-white focus:outline-none focus:border-rose-500"
+                className="w-full h-9 pl-9 pr-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all placeholder:text-slate-400"
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
 
             {/* Status Filter */}
-            <div className="inline-flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200 text-sm font-normal">
+            <div className="flex items-center bg-slate-100/80 p-1 rounded-xl border border-slate-200/60 overflow-x-auto custom-scrollbar text-xs font-medium">
               <button
                 type="button"
                 onClick={() => setStatusFilter('ALL')}
-                className={`px-2.5 py-1 rounded-md transition-colors cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${
                   statusFilter === 'ALL'
-                    ? 'bg-white text-slate-900 shadow-xs'
-                    : 'text-slate-500 hover:text-slate-800'
+                    ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                    : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                ทั้งหมด
+                ทั้งหมด ({issueLogRecords.length})
               </button>
               <button
                 type="button"
                 onClick={() => setStatusFilter('Open')}
-                className={`px-2.5 py-1 rounded-md transition-colors cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${
                   statusFilter === 'Open'
-                    ? 'bg-rose-600 text-white shadow-xs'
-                    : 'text-slate-500 hover:text-slate-800'
+                    ? 'bg-rose-600 text-white shadow-2xs font-semibold'
+                    : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                รอดำเนินการ (Open)
+                รอดำเนินการ
               </button>
               <button
                 type="button"
                 onClick={() => setStatusFilter('In Progress')}
-                className={`px-2.5 py-1 rounded-md transition-colors cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${
                   statusFilter === 'In Progress'
-                    ? 'bg-amber-600 text-white shadow-xs'
-                    : 'text-slate-500 hover:text-slate-800'
+                    ? 'bg-amber-600 text-white shadow-2xs font-semibold'
+                    : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 กำลังแก้ไข
@@ -364,13 +409,13 @@ export const IssueLogModule: React.FC<IssueLogModuleProps> = ({
               <button
                 type="button"
                 onClick={() => setStatusFilter('Resolved')}
-                className={`px-2.5 py-1 rounded-md transition-colors cursor-pointer ${
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer whitespace-nowrap ${
                   statusFilter === 'Resolved'
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'text-slate-500 hover:text-slate-800'
+                    ? 'bg-emerald-600 text-white shadow-2xs font-semibold'
+                    : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                แก้ไขเรียบร้อย
+                แก้ไขแล้ว
               </button>
             </div>
           </div>
@@ -380,16 +425,16 @@ export const IssueLogModule: React.FC<IssueLogModuleProps> = ({
         <div className="overflow-x-auto max-h-[calc(100vh-320px)] min-h-[400px] overflow-y-auto custom-scrollbar">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-sm font-normal uppercase tracking-wider text-slate-500 sticky top-0 z-10 shadow-2xs">
-                <th className="py-3.5 px-4">วันที่พบ</th>
-                <th className="py-3.5 px-4">เลขที่บิล (Bill No)</th>
-                <th className="py-3.5 px-4">Supplier (ผู้ส่งมอบ)</th>
-                <th className="py-3.5 px-4">วัตถุดิบ (RM)</th>
-                <th className="py-3.5 px-4 text-right">ปริมาณมีปัญหา (kg)</th>
-                <th className="py-3.5 px-4">รายละเอียดปัญหาที่พบ (Problems Found)</th>
-                <th className="py-3.5 px-4">การดำเนินการแก้ไข (Corrective Action)</th>
-                <th className="py-3.5 px-4 text-center">สถานะ</th>
-                <th className="py-3.5 px-4 text-center">จัดการ</th>
+              <tr className="bg-white border-b border-slate-100 text-[11px] font-semibold uppercase tracking-wider text-slate-400 sticky top-0 z-10">
+                <th className="py-3 px-4 w-28">วันที่พบ</th>
+                <th className="py-3 px-4 w-32">Bill No</th>
+                <th className="py-3 px-4">Supplier</th>
+                <th className="py-3 px-4">วัตถุดิบ (RM)</th>
+                <th className="py-3 px-4 text-right">ปริมาณมีปัญหา</th>
+                <th className="py-3 px-4">รายละเอียดปัญหา</th>
+                <th className="py-3 px-4">มาตรการแก้ไข</th>
+                <th className="py-3 px-4 text-center w-32">สถานะ</th>
+                <th className="py-3 px-4 text-center w-20">จัดการ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 text-sm font-normal text-slate-800">
@@ -535,6 +580,8 @@ export const IssueLogModule: React.FC<IssueLogModuleProps> = ({
           itemUnitLabel="รายการปัญหา"
         />
       </div>
+      </>
+      )}
 
       {/* Modal Dialog for Issue Log Creation (Auto Trigger & Manual Input) */}
       {isModalOpen && (

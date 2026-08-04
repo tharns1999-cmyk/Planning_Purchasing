@@ -4,11 +4,12 @@ import {
   DefectRule,
   ReceivingRecord,
   IssueLogRecord,
-  
+  DefectCategoryItem,
   formatPhoneNumber,
   MOCK_SUPPLIERS,
   MOCK_RM_ITEMS,
 } from './DefectMatrixService';
+import { AuditService } from './AuditService';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 declare const google: any;
@@ -19,6 +20,7 @@ export interface PurchasingDbData {
   suppliers: Supplier[];
   rmItems: RMItem[];
   defectMatrix: Record<string, DefectRule[]>;
+  defectCategories: DefectCategoryItem[];
   receivingRecords: ReceivingRecord[];
   issueLogs: IssueLogRecord[];
 }
@@ -38,9 +40,9 @@ export class PurchasingGasService {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   static _lastMeta: any = null;
 
-  static async loadPurchasingData(): Promise<PurchasingDbData> {
+  static async loadPurchasingData(forceRefresh = false): Promise<PurchasingDbData> {
     if (this.isGoogleAvailable) {
-      console.log('[PurchasingGasService] google.script.run is available — fetching from GAS...');
+      console.log('[PurchasingGasService] google.script.run is available — fetching from GAS...', { forceRefresh });
       return new Promise((resolve) => {
         const timeoutId = setTimeout(() => {
           console.warn('[PurchasingGasService] ⏰ GAS fetch TIMED OUT after 10s, falling back to LocalStorage');
@@ -71,6 +73,7 @@ export class PurchasingGasService {
                 suppliers: formattedSuppliers,
                 rmItems: res.data.rmItems || [],
                 defectMatrix: (res.data.defectMatrix as Record<string, DefectRule[]>) || {},
+                defectCategories: res.data.defectCategories || [],
                 receivingRecords: res.data.receivingRecords || [],
                 issueLogs: res.data.issueLogs || [],
               };
@@ -107,7 +110,7 @@ export class PurchasingGasService {
             this._lastMeta = { source: 'localStorage_gas_failure', error: String(err) };
             resolve(this.loadFromLocalStorage());
           })
-          .getPurchasingInitialData();
+          .getPurchasingInitialData(forceRefresh);
       });
     }
 
@@ -130,11 +133,13 @@ export class PurchasingGasService {
         }));
 
         const rawRmItems: RMItem[] = parsed.rmItems || [];
+        const rawDefectCats: DefectCategoryItem[] = parsed.defectCategories || [];
 
         return {
           suppliers: formattedSuppliers,
           rmItems: rawRmItems.length > 0 ? rawRmItems : MOCK_RM_ITEMS,
           defectMatrix: parsed.defectMatrix || {},
+          defectCategories: rawDefectCats,
           receivingRecords: parsed.receivingRecords || [],
           issueLogs: parsed.issueLogs || [],
         };
@@ -146,6 +151,7 @@ export class PurchasingGasService {
       suppliers: MOCK_SUPPLIERS,
       rmItems: MOCK_RM_ITEMS,
       defectMatrix: {},
+      defectCategories: [],
       receivingRecords: [],
       issueLogs: [],
     };
@@ -163,7 +169,7 @@ export class PurchasingGasService {
 
   // --- Persistence Methods ---
 
-  static saveSupplier(supplier: Supplier): void {
+  static async saveSupplier(supplier: Supplier): Promise<void> {
     const current = this.loadFromLocalStorage();
     const exists = current.suppliers.some((s) => s.id === supplier.id);
     const updatedSuppliers = exists
@@ -172,27 +178,29 @@ export class PurchasingGasService {
     this.saveToLocalStorage({ suppliers: updatedSuppliers });
 
     if (this.isGoogleAvailable) {
+      const clientMeta = await AuditService.getClientMetadata();
       google.script.run
         .withSuccessHandler(() => console.log('Supplier saved to GAS'))
         .withFailureHandler((err: unknown) => console.error('saveSupplierRecord failed:', err))
-        .saveSupplierRecord(supplier);
+        .saveSupplierRecord(supplier, clientMeta);
     }
   }
 
-  static deleteSupplier(id: string): void {
+  static async deleteSupplier(id: string): Promise<void> {
     const current = this.loadFromLocalStorage();
     const updatedSuppliers = current.suppliers.filter((s) => s.id !== id);
     this.saveToLocalStorage({ suppliers: updatedSuppliers });
 
     if (this.isGoogleAvailable) {
+      const clientMeta = await AuditService.getClientMetadata();
       google.script.run
         .withSuccessHandler(() => console.log('Supplier deleted from GAS'))
         .withFailureHandler((err: unknown) => console.error('deleteSupplierRecord failed:', err))
-        .deleteSupplierRecord(id);
+        .deleteSupplierRecord(id, clientMeta);
     }
   }
 
-  static saveRMItem(rmItem: RMItem): void {
+  static async saveRMItem(rmItem: RMItem): Promise<void> {
     const current = this.loadFromLocalStorage();
     const exists = current.rmItems.some((r) => r.id === rmItem.id);
     const updatedRms = exists
@@ -201,53 +209,73 @@ export class PurchasingGasService {
     this.saveToLocalStorage({ rmItems: updatedRms });
 
     if (this.isGoogleAvailable) {
+      const clientMeta = await AuditService.getClientMetadata();
       google.script.run
         .withSuccessHandler(() => console.log('RMItem saved to GAS'))
         .withFailureHandler((err: unknown) => console.error('saveRMRecord failed:', err))
-        .saveRMRecord(rmItem);
+        .saveRMRecord(rmItem, clientMeta);
     }
   }
 
-  static deleteRMItem(id: string): void {
+  static async deleteRMItem(id: string): Promise<void> {
     const current = this.loadFromLocalStorage();
     const updatedRms = current.rmItems.filter((r) => r.id !== id);
     this.saveToLocalStorage({ rmItems: updatedRms });
 
     if (this.isGoogleAvailable) {
+      const clientMeta = await AuditService.getClientMetadata();
       google.script.run
         .withSuccessHandler(() => console.log('RMItem deleted from GAS'))
         .withFailureHandler((err: unknown) => console.error('deleteRMRecord failed:', err))
-        .deleteRMRecord(id);
+        .deleteRMRecord(id, clientMeta);
     }
   }
 
-  static saveReceivingRecord(record: ReceivingRecord): void {
+  static async saveReceivingRecord(record: ReceivingRecord): Promise<void> {
     const current = this.loadFromLocalStorage();
     const updated = [record, ...current.receivingRecords];
     this.saveToLocalStorage({ receivingRecords: updated });
 
     if (this.isGoogleAvailable) {
+      const clientMeta = await AuditService.getClientMetadata();
       google.script.run
         .withSuccessHandler(() => console.log('Receiving record saved to GAS'))
         .withFailureHandler((err: unknown) => console.error('saveReceivingRecord failed:', err))
-        .saveReceivingRecord(record);
+        .saveReceivingRecord(record, clientMeta);
     }
   }
 
-  static deleteReceivingRecord(id: string): void {
+  static async saveReceivingRecordsBatch(records: ReceivingRecord[]): Promise<void> {
+    if (!records || records.length === 0) return;
+    
+    const current = this.loadFromLocalStorage();
+    const updated = [...records, ...current.receivingRecords];
+    this.saveToLocalStorage({ receivingRecords: updated });
+
+    if (this.isGoogleAvailable) {
+      const clientMeta = await AuditService.getClientMetadata();
+      google.script.run
+        .withSuccessHandler(() => console.log('Receiving records batch saved to GAS'))
+        .withFailureHandler((err: unknown) => console.error('saveReceivingRecordsBatch failed:', err))
+        .saveReceivingRecordsBatch(records, clientMeta);
+    }
+  }
+
+  static async deleteReceivingRecord(id: string): Promise<void> {
     const current = this.loadFromLocalStorage();
     const updated = current.receivingRecords.filter((r) => r.id !== id);
     this.saveToLocalStorage({ receivingRecords: updated });
 
     if (this.isGoogleAvailable) {
+      const clientMeta = await AuditService.getClientMetadata();
       google.script.run
         .withSuccessHandler(() => console.log('Receiving record deleted from GAS'))
         .withFailureHandler((err: unknown) => console.error('deleteReceivingRecord failed:', err))
-        .deleteReceivingRecord(id);
+        .deleteReceivingRecord(id, clientMeta);
     }
   }
 
-  static saveIssueLogRecord(record: IssueLogRecord): void {
+  static async saveIssueLogRecord(record: IssueLogRecord): Promise<void> {
     const current = this.loadFromLocalStorage();
     const exists = current.issueLogs.some((i) => i.id === record.id);
     const updatedIssues = exists
@@ -265,14 +293,15 @@ export class PurchasingGasService {
     this.saveToLocalStorage({ issueLogs: updatedIssues, receivingRecords: updatedReceiving });
 
     if (this.isGoogleAvailable) {
+      const clientMeta = await AuditService.getClientMetadata();
       google.script.run
         .withSuccessHandler(() => console.log('Issue log record saved to GAS'))
         .withFailureHandler((err: unknown) => console.error('saveIssueLogRecord failed:', err))
-        .saveIssueLogRecord(record);
+        .saveIssueLogRecord(record, clientMeta);
     }
   }
 
-  static deleteIssueLogRecord(id: string): void {
+  static async deleteIssueLogRecord(id: string): Promise<void> {
     const current = this.loadFromLocalStorage();
     const issueToDelete = current.issueLogs.find(i => i.id === id);
     const updatedIssues = current.issueLogs.filter((i) => i.id !== id);
@@ -287,21 +316,55 @@ export class PurchasingGasService {
     this.saveToLocalStorage({ issueLogs: updatedIssues, receivingRecords: updatedReceiving });
 
     if (this.isGoogleAvailable) {
+      const clientMeta = await AuditService.getClientMetadata();
       google.script.run
         .withSuccessHandler(() => console.log('Issue log record deleted from GAS'))
         .withFailureHandler((err: unknown) => console.error('deleteIssueLogRecord failed:', err))
-        .deleteIssueLogRecord(id);
+        .deleteIssueLogRecord(id, clientMeta);
     }
   }
 
-  static saveDefectMatrix(matrix: Record<string, DefectRule[]>): void {
+  static async saveDefectMatrix(matrix: Record<string, DefectRule[]>): Promise<void> {
     this.saveToLocalStorage({ defectMatrix: matrix });
 
     if (this.isGoogleAvailable) {
+      const clientMeta = await AuditService.getClientMetadata();
       google.script.run
         .withSuccessHandler(() => console.log('Defect matrix rules saved to GAS'))
         .withFailureHandler((err: unknown) => console.error('saveDefectMatrixRules failed:', err))
-        .saveDefectMatrixRules(matrix);
+        .saveDefectMatrixRules(matrix, clientMeta);
+    }
+  }
+
+  static async saveDefectCategory(category: DefectCategoryItem): Promise<void> {
+    const current = this.loadFromLocalStorage();
+    const exists = current.defectCategories.some((c) => c.id === category.id);
+    const updatedCats = exists
+      ? current.defectCategories.map((c) => (c.id === category.id ? category : c))
+      : [...current.defectCategories, category];
+
+    this.saveToLocalStorage({ defectCategories: updatedCats });
+
+    if (this.isGoogleAvailable) {
+      const clientMeta = await AuditService.getClientMetadata();
+      google.script.run
+        .withSuccessHandler(() => console.log('Defect category saved to GAS'))
+        .withFailureHandler((err: unknown) => console.error('saveDefectCategory failed:', err))
+        .saveDefectCategory(category, clientMeta);
+    }
+  }
+
+  static async deleteDefectCategory(id: string): Promise<void> {
+    const current = this.loadFromLocalStorage();
+    const updatedCats = current.defectCategories.filter((c) => c.id !== id);
+    this.saveToLocalStorage({ defectCategories: updatedCats });
+
+    if (this.isGoogleAvailable) {
+      const clientMeta = await AuditService.getClientMetadata();
+      google.script.run
+        .withSuccessHandler(() => console.log('Defect category deleted from GAS'))
+        .withFailureHandler((err: unknown) => console.error('deleteDefectCategory failed:', err))
+        .deleteDefectCategory(id, clientMeta);
     }
   }
 }

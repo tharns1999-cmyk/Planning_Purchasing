@@ -12,10 +12,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "build:gas": "vite build --mode gas && node scripts/build-gas.js"
+    "build:gas": "vite build --mode gas && node scripts/build-gas.js",
+    "push:gas": "clasp push -f",
+    "deploy:gas": "npm run build:gas && clasp push -f && clasp deploy -i AKfycbzm9dELC42nwdQweQXjjS7D797bBEKdRO5cavD9KsqqJP5PX7txDFAVSszYwifkGayT"
   },
   "dependencies": {
-    "@rollup/rollup-win32-x64-msvc": "^4.62.2",
     "clsx": "^2.1.1",
     "html-to-image": "^1.11.13",
     "lucide-react": "^0.475.0",
@@ -28,6 +29,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.19.0",
+    "@google/clasp": "^3.3.0",
     "@playwright/test": "^1.50.1",
     "@tailwindcss/vite": "^4.0.7",
     "@testing-library/jest-dom": "^6.6.3",

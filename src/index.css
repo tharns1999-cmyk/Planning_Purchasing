@@ -2,7 +2,7 @@
 
 @layer base {
   :root {
-    --font-thai: "IBM Plex Sans Thai", "Sukhumvit Set", "Kanit", "Noto Sans Thai", "Leelawadee UI", Tahoma, system-ui, sans-serif;
+    --font-thai: "Noto Sans Thai", "Inter", "IBM Plex Sans Thai", "Sukhumvit Set", "Kanit", "Leelawadee UI", Tahoma, system-ui, sans-serif;
     --font-sarabun: "Sarabun", "Sarabun New", "TH Sarabun New", "Noto Sans Thai Looped", "Leelawadee", system-ui, sans-serif;
   }
 
@@ -13,13 +13,15 @@
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    font-size: 16px; /* High legibility base font size */
+    letter-spacing: -0.01em;
   }
 
-  /* Global UI Polish: Smooth transitions for interactive elements */
+  /* Global UI Polish: Ultra-snappy transitions for interactive elements */
   button, a, select, input {
     transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
-    transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
-    transition-duration: 200ms;
+    transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+    transition-duration: 120ms;
   }
 
   /* Micro-interactions: scale down on active (click) */
@@ -36,6 +38,36 @@
 @layer utilities {
   .font-sarabun {
     font-family: var(--font-sarabun);
+  }
+
+  /* High-Legibility Typography Ramp for Thai UI */
+  .text-\[10px\] {
+    font-size: 0.75rem !important; /* 12px min */
+    line-height: 1rem !important;
+  }
+  .text-\[11px\] {
+    font-size: 0.8125rem !important; /* 13px */
+    line-height: 1.125rem !important;
+  }
+  .text-xs {
+    font-size: 0.875rem !important; /* 14px */
+    line-height: 1.25rem !important;
+  }
+  .text-sm {
+    font-size: 0.9375rem !important; /* 15px */
+    line-height: 1.375rem !important;
+  }
+  .text-base {
+    font-size: 1rem !important; /* 16px */
+    line-height: 1.5rem !important;
+  }
+  .text-lg {
+    font-size: 1.125rem !important; /* 18px */
+    line-height: 1.75rem !important;
+  }
+  .text-xl {
+    font-size: 1.25rem !important; /* 20px */
+    line-height: 1.75rem !important;
   }
 }
 

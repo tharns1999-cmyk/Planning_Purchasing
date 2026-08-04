@@ -58,6 +58,13 @@ export interface ReceivingRecord {
   postProductionDate?: string;
 }
 
+export interface DefectCategoryItem {
+  id: string;
+  name: string;
+  description?: string;
+  isActive?: boolean;
+}
+
 export const DEFECT_CATEGORIES = [
   'สิ่งแปลกปลอม / สิ่งปนเปื้อน (Foreign Matters / Pests)',
   'คุณภาพเสื่อมสภาพ / สดไม่ได้มาตรฐาน (Degradation / Freshness)',

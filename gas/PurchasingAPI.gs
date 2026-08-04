@@ -8,11 +8,101 @@
  * Each section is wrapped in its own try/catch for resilience.
  * Returns _meta with source info for frontend debugging.
  */
-function getPurchasingInitialData() {
+
+// -------------------------------------------------------------
+// CACHE SERVICE UTILITIES (Speed up initial data loading)
+// -------------------------------------------------------------
+const PURCHASING_CACHE_KEY = 'purchasing_initial_data_v1';
+
+function clearPurchasingCache() {
+  try {
+    const cache = CacheService.getScriptCache();
+    cache.remove(PURCHASING_CACHE_KEY);
+    const chunksStr = cache.get(PURCHASING_CACHE_KEY + '_chunks');
+    if (chunksStr) {
+      const chunks = parseInt(chunksStr, 10);
+      const keys = [];
+      for (let i = 0; i < chunks; i++) {
+        keys.push(PURCHASING_CACHE_KEY + '_chunk_' + i);
+      }
+      keys.push(PURCHASING_CACHE_KEY + '_chunks');
+      cache.removeAll(keys);
+    }
+  } catch (e) {
+    Logger.log('Cache clear failed: ' + e.toString());
+  }
+}
+
+function setPurchasingCache(dataString) {
+  try {
+    const cache = CacheService.getScriptCache();
+    const expiration = 21600; // 6 hours (Max allowed by GAS)
+    const chunkSize = 100000; // 100KB max per chunk
+    
+    if (dataString.length <= chunkSize) {
+      cache.put(PURCHASING_CACHE_KEY, dataString, expiration);
+      return;
+    }
+    
+    const chunks = Math.ceil(dataString.length / chunkSize);
+    const cacheObj = {};
+    for (let i = 0; i < chunks; i++) {
+      cacheObj[PURCHASING_CACHE_KEY + '_chunk_' + i] = dataString.substring(i * chunkSize, (i + 1) * chunkSize);
+    }
+    cacheObj[PURCHASING_CACHE_KEY + '_chunks'] = chunks.toString();
+    cache.putAll(cacheObj, expiration);
+  } catch (e) {
+    Logger.log('Cache put failed: ' + e.toString());
+  }
+}
+
+function getPurchasingCache() {
+  try {
+    const cache = CacheService.getScriptCache();
+    const single = cache.get(PURCHASING_CACHE_KEY);
+    if (single) return single;
+    
+    const chunksStr = cache.get(PURCHASING_CACHE_KEY + '_chunks');
+    if (!chunksStr) return null;
+    
+    const chunks = parseInt(chunksStr, 10);
+    const keys = [];
+    for (let i = 0; i < chunks; i++) {
+      keys.push(PURCHASING_CACHE_KEY + '_chunk_' + i);
+    }
+    
+    const chunkData = cache.getAll(keys);
+    let result = '';
+    for (let i = 0; i < chunks; i++) {
+      const chunk = chunkData[PURCHASING_CACHE_KEY + '_chunk_' + i];
+      if (!chunk) return null;
+      result += chunk;
+    }
+    return result;
+  } catch (e) {
+    return null;
+  }
+}
+
+function getPurchasingInitialData(forceRefresh) {
+  if (forceRefresh) {
+    clearPurchasingCache();
+  } else {
+    const cachedDataStr = getPurchasingCache();
+    if (cachedDataStr) {
+      try {
+        const parsed = JSON.parse(cachedDataStr);
+        parsed._meta.cacheHit = true;
+        return parsed;
+      } catch(e) {}
+    }
+  }
+
   const errors = [];
   let suppliers = [];
   let rmItems = [];
   let defectMatrix = {};
+  let defectCategories = [];
   let formattedReceiving = [];
   let formattedIssues = [];
 
@@ -20,7 +110,7 @@ function getPurchasingInitialData() {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
 
     // Auto-setup if essential sheet is missing
-    if (!ss.getSheetByName('DB_Suppliers') || !ss.getSheetByName('DB_DefectMatrix')) {
+    if (!ss.getSheetByName('DB_Suppliers') || !ss.getSheetByName('DB_DefectMatrix') || !ss.getSheetByName('DB_DefectCategories') || !ss.getSheetByName('Audit_Logs')) {
       setupPurchasingDatabase();
     }
 
@@ -86,6 +176,19 @@ function getPurchasingInitialData() {
       errors.push('DefectMatrix: ' + e.toString());
     }
 
+    // --- Defect Categories (Master Data) ---
+    try {
+      const rawDefectCats = getSheetDataAsObjects(ss, 'DB_DefectCategories') || [];
+      defectCategories = rawDefectCats.map((c) => ({
+        id: String(c.id || ''),
+        name: String(c.name || ''),
+        description: String(c.description || ''),
+        isActive: c.isActive !== false && String(c.isActive).toLowerCase() !== 'false',
+      }));
+    } catch (e) {
+      errors.push('DefectCategories: ' + e.toString());
+    }
+
     // --- Receiving Records ---
     try {
       const receivingRecords = getSheetDataAsObjects(ss, 'DB_ReceivingRecords') || [];
@@ -125,6 +228,7 @@ function getPurchasingInitialData() {
           suppliers: suppliers.length,
           rmItems: rmItems.length,
           defectMatrixCategories: Object.keys(defectMatrix).length,
+          defectCategories: defectCategories.length,
           receivingRecords: formattedReceiving.length,
           issueLogs: formattedIssues.length,
         },
@@ -134,6 +238,7 @@ function getPurchasingInitialData() {
         suppliers: suppliers,
         rmItems: rmItems,
         defectMatrix: defectMatrix,
+        defectCategories: defectCategories,
         receivingRecords: formattedReceiving,
         issueLogs: formattedIssues,
       },
@@ -147,6 +252,7 @@ function getPurchasingInitialData() {
       return val;
     });
 
+    setPurchasingCache(cleanJsonString);
     return JSON.parse(cleanJsonString);
   } catch (err) {
     return { status: 'error', message: err.toString(), errors: errors };
@@ -208,7 +314,7 @@ function testPurchasingRMItems() {
 /**
  * Save New or Edit Receiving Record
  */
-function saveReceivingRecord(record) {
+function saveReceivingRecord(record, clientMeta) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     let sheet = ss.getSheetByName('DB_ReceivingRecords');
@@ -256,7 +362,118 @@ function saveReceivingRecord(record) {
     }
 
     SpreadsheetApp.flush();
+    clearPurchasingCache();
+
+    const detailParts = [
+      `Bill: ${record.billNo}`,
+      `Date: ${record.receiveDate}`,
+      `Supplier: ${record.supplierName} (${record.supplierId})`,
+      `RM: ${record.rmName} (${record.rmId}, Cat: ${record.rmCategory})`,
+      `Receive Qty: ${record.receiveQty} kg`,
+      `Sample Qty: ${record.sampleQty} kg`,
+      `Defect Qty: ${record.defectQty} kg (${record.defectPercent}%)`,
+      `QC Status: ${record.isPass ? 'PASS' : 'FAIL'}`,
+      `Remark: ${record.remark || '-'}`
+    ];
+    if (record.postProductionDefectQty !== undefined && record.postProductionDefectQty !== '') {
+      detailParts.push(`Post-Prod Defect: ${record.postProductionDefectQty} kg`);
+      detailParts.push(`Post-Prod Date: ${record.postProductionDate || '-'}`);
+      detailParts.push(`Post-Prod Remark: ${record.postProductionRemark || '-'}`);
+    }
+
+    logAuditEntry(
+      clientMeta,
+      rowIndex > 0 ? 'UPDATE' : 'CREATE',
+      'ReceivingRecord',
+      record.id,
+      detailParts.join(' | ')
+    );
+
     return { status: 'success', data: record };
+  } catch (err) {
+    return { status: 'error', message: err.toString() };
+  }
+}
+
+/**
+ * Save Multiple Receiving Records (Batch Insert)
+ */
+function saveReceivingRecordsBatch(records, clientMeta) {
+  try {
+    if (!records || !Array.isArray(records) || records.length === 0) {
+      return { status: 'error', message: 'No records provided' };
+    }
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let sheet = ss.getSheetByName('DB_ReceivingRecords');
+    if (!sheet) {
+      setupPurchasingDatabase();
+      sheet = ss.getSheetByName('DB_ReceivingRecords');
+    }
+
+    const data = sheet.getDataRange().getValues();
+    const existingIds = new Map();
+    for (let i = 1; i < data.length; i++) {
+      existingIds.set(String(data[i][0]), i + 1);
+    }
+
+    const rowsToAppend = [];
+    let updatedCount = 0;
+
+    for (const record of records) {
+      const row = [
+        record.id,
+        record.billNo,
+        record.receiveDate,
+        record.supplierId,
+        record.supplierName,
+        record.rmId,
+        record.rmName,
+        record.rmCategory,
+        record.receiveQty,
+        record.sampleQty,
+        record.defectQty,
+        record.defectPercent,
+        record.isPass,
+        record.remark || '',
+        record.createdAt || getThaiTimestamp(),
+        record.hasIssueLog || false,
+        record.postProductionDefectQty !== undefined ? record.postProductionDefectQty : '',
+        record.postProductionRemark || '',
+        record.postProductionDate || ''
+      ];
+
+      const rowIndex = existingIds.get(String(record.id));
+      if (rowIndex) {
+        // Update existing row
+        sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+        updatedCount++;
+      } else {
+        // Prepare to append new row
+        rowsToAppend.push(row);
+      }
+    }
+
+    if (rowsToAppend.length > 0) {
+      sheet.getRange(sheet.getLastRow() + 1, 1, rowsToAppend.length, rowsToAppend[0].length).setValues(rowsToAppend);
+    }
+
+    SpreadsheetApp.flush();
+    clearPurchasingCache();
+
+    const itemSummaries = records.map((r, idx) => 
+      `Item #${idx+1}: RM: ${r.rmName} (${r.rmCategory}) | Rec: ${r.receiveQty}kg | Sample: ${r.sampleQty}kg | Defect: ${r.defectQty}kg (${r.defectPercent}%) | QC: ${r.isPass ? 'PASS' : 'FAIL'}${r.remark ? ` | Remark: ${r.remark}` : ''}`
+    ).join('\n');
+
+    logAuditEntry(
+      clientMeta,
+      'CREATE_BATCH',
+      'ReceivingRecord',
+      `BATCH_${records[0].billNo}`,
+      `Bill: ${records[0].billNo} | Date: ${records[0].receiveDate} | Supplier: ${records[0].supplierName} (${records[0].supplierId})\nTotal Items: ${records.length} (${rowsToAppend.length} Created, ${updatedCount} Updated)\nItems List:\n${itemSummaries}`
+    );
+
+    return { status: 'success', added: rowsToAppend.length, updated: updatedCount };
   } catch (err) {
     return { status: 'error', message: err.toString() };
   }
@@ -265,7 +482,7 @@ function saveReceivingRecord(record) {
 /**
  * Save New or Edit Issue Log Record
  */
-function saveIssueLogRecord(record) {
+function saveIssueLogRecord(record, clientMeta) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     let sheet = ss.getSheetByName('DB_IssueLogs');
@@ -322,13 +539,23 @@ function saveIssueLogRecord(record) {
     }
 
     SpreadsheetApp.flush();
+    clearPurchasingCache();
+
+    logAuditEntry(
+      clientMeta,
+      rowIndex > 0 ? 'UPDATE' : 'CREATE',
+      'IssueLogRecord',
+      record.id,
+      `Bill: ${record.billNo} | Issue Date: ${record.issueDate} | Supplier: ${record.supplierName} (${record.supplierId}) | RM: ${record.rmName} (${record.rmId}) | Problem Qty: ${record.problemQty} kg | Defect Category: ${record.defectCategory} | Status: ${record.status} | Problems Found: ${record.problemsFound || '-'} | Corrective Action: ${record.correctiveAction || '-'}${record.receivingRecordId ? ` | Linked Receiving ID: ${record.receivingRecordId}` : ''}`
+    );
+
     return { status: 'success', data: record };
   } catch (err) {
     return { status: 'error', message: err.toString() };
   }
 }
 
-function deleteReceivingRecord(id) {
+function deleteReceivingRecord(id, clientMeta) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName('DB_ReceivingRecords');
@@ -337,8 +564,14 @@ function deleteReceivingRecord(id) {
     const data = sheet.getDataRange().getValues();
     for (let i = 1; i < data.length; i++) {
       if (String(data[i][0]) === String(id)) {
+        const recData = data[i];
+        const detailStr = `Bill: ${recData[1]} | Date: ${recData[2]} | Supplier: ${recData[4]} (${recData[3]}) | RM: ${recData[6]} (${recData[5]}, Cat: ${recData[7]}) | Qty: ${recData[8]} kg | Sample: ${recData[9]} kg | Defect: ${recData[10]} kg (${recData[11]}%) | QC Status: ${recData[12] ? 'PASS' : 'FAIL'} | Remark: ${recData[13] || '-'}`;
         sheet.deleteRow(i + 1);
         SpreadsheetApp.flush();
+        clearPurchasingCache();
+
+        logAuditEntry(clientMeta, 'DELETE', 'ReceivingRecord', id, detailStr);
+
         return { status: 'success' };
       }
     }
@@ -351,7 +584,7 @@ function deleteReceivingRecord(id) {
 /**
  * Save or Update Supplier
  */
-function saveSupplierRecord(supplier) {
+function saveSupplierRecord(supplier, clientMeta) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     let sheet = ss.getSheetByName('DB_Suppliers');
@@ -408,6 +641,16 @@ function saveSupplierRecord(supplier) {
     }
 
     SpreadsheetApp.flush();
+    clearPurchasingCache();
+
+    logAuditEntry(
+      clientMeta,
+      rowIndex > 0 ? 'UPDATE' : 'CREATE',
+      'Supplier',
+      supplier.id,
+      `Code: ${supplier.code} | Name: ${supplier.name} | Phone: ${cleanPhone || '-'} | Contact Person: ${supplier.contactPerson || '-'} | Email: ${supplier.email || '-'} | Address: ${supplier.address || '-'}`
+    );
+
     return { status: 'success', data: supplier };
   } catch (err) {
     return { status: 'error', message: err.toString() };
@@ -417,7 +660,7 @@ function saveSupplierRecord(supplier) {
 /**
  * Delete Supplier
  */
-function deleteSupplierRecord(id) {
+function deleteSupplierRecord(id, clientMeta) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName('DB_Suppliers');
@@ -425,8 +668,14 @@ function deleteSupplierRecord(id) {
 
     for (let i = 1; i < data.length; i++) {
       if (String(data[i][0]) === String(id)) {
+        const suppData = data[i];
+        const detailStr = `Code: ${suppData[1]} | Name: ${suppData[2]} | Phone: ${suppData[3] || '-'} | Contact Person: ${suppData[4] || '-'} | Email: ${suppData[5] || '-'} | Address: ${suppData[6] || '-'}`;
         sheet.deleteRow(i + 1);
         SpreadsheetApp.flush();
+        clearPurchasingCache();
+
+        logAuditEntry(clientMeta, 'DELETE', 'Supplier', id, detailStr);
+
         return { status: 'success', id: id };
       }
     }
@@ -439,7 +688,7 @@ function deleteSupplierRecord(id) {
 /**
  * Save or Update RM Item
  */
-function saveRMRecord(rmItem) {
+function saveRMRecord(rmItem, clientMeta) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName('DB_RMItems');
@@ -481,6 +730,17 @@ function saveRMRecord(rmItem) {
     }
 
     SpreadsheetApp.flush();
+    clearPurchasingCache();
+
+    const supplierIdsStr = Array.isArray(rmItem.supplierIds) ? rmItem.supplierIds.join(', ') : String(rmItem.supplierIds || '');
+    logAuditEntry(
+      clientMeta,
+      rowIndex > 0 ? 'UPDATE' : 'CREATE',
+      'RMItem',
+      rmItem.id,
+      `Code: ${rmItem.code} | Name: ${rmItem.name} | Category: ${rmItem.categoryLabel || rmItem.category} | Unit: ${rmItem.unit} | Primary Supplier: ${rmItem.supplierName} (${rmItem.supplierId}) | Associated Supplier IDs: [${supplierIdsStr}]`
+    );
+
     return { status: 'success', data: rmItem };
   } catch (err) {
     return { status: 'error', message: err.toString() };
@@ -490,7 +750,7 @@ function saveRMRecord(rmItem) {
 /**
  * Delete RM Item
  */
-function deleteRMRecord(id) {
+function deleteRMRecord(id, clientMeta) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName('DB_RMItems');
@@ -498,8 +758,14 @@ function deleteRMRecord(id) {
 
     for (let i = 1; i < data.length; i++) {
       if (String(data[i][0]) === String(id)) {
+        const rmData = data[i];
+        const detailStr = `Code: ${rmData[1]} | Name: ${rmData[2]} | Category: ${rmData[4]} (${rmData[3]}) | Unit: ${rmData[5]} | Primary Supplier: ${rmData[7]} (${rmData[6]})`;
         sheet.deleteRow(i + 1);
         SpreadsheetApp.flush();
+        clearPurchasingCache();
+
+        logAuditEntry(clientMeta, 'DELETE', 'RMItem', id, detailStr);
+
         return { status: 'success', id: id };
       }
     }
@@ -512,7 +778,7 @@ function deleteRMRecord(id) {
 /**
  * Save QC Defect Matrix Rules
  */
-function saveDefectMatrixRules(matrix) {
+function saveDefectMatrixRules(matrix, clientMeta) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName('DB_DefectMatrix');
@@ -534,6 +800,22 @@ function saveDefectMatrixRules(matrix) {
     }
 
     SpreadsheetApp.flush();
+    clearPurchasingCache();
+
+    const catSummaries = Object.keys(matrix).map(cat => {
+      const rules = matrix[cat] || [];
+      const ruleStrs = rules.map(r => `Range ${r.minQty}-${r.maxQty}kg -> Sample: ${r.sampleQty}kg, MaxDefect: ${r.acceptMaxDefectQty}kg (${r.acceptMaxDefectPercent}%)`).join('; ');
+      return `Category [${cat}] (${rules.length} rules): ${ruleStrs}`;
+    }).join('\n');
+
+    logAuditEntry(
+      clientMeta,
+      'UPDATE',
+      'DefectMatrix',
+      'ALL_RULES',
+      `Updated QC matrix rules for ${Object.keys(matrix).length} categories:\n${catSummaries}`
+    );
+
     return { status: 'success', data: matrix };
   } catch (err) {
     return { status: 'error', message: err.toString() };
@@ -543,7 +825,7 @@ function saveDefectMatrixRules(matrix) {
 /**
  * Delete Issue Log Record (Also resets hasIssueLog in DB_ReceivingRecords if applicable)
  */
-function deleteIssueLogRecord(id) {
+function deleteIssueLogRecord(id, clientMeta) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName('DB_IssueLogs');
@@ -555,6 +837,8 @@ function deleteIssueLogRecord(id) {
     for (let i = 1; i < data.length; i++) {
       if (String(data[i][0]) === String(id)) {
         deletedReceivingId = data[i][1]; // Column 2 (index 1) is receivingRecordId
+        const issueData = data[i];
+        const detailStr = `Bill: ${issueData[6]} | Issue Date: ${issueData[7]} | Supplier: ${issueData[3]} (${issueData[2]}) | RM: ${issueData[5]} (${issueData[4]}) | Problem Qty: ${issueData[8]} kg | Defect Category: ${issueData[9]} | Status: ${issueData[12]} | Problems: ${issueData[10] || '-'} | Action: ${issueData[11] || '-'}`;
         sheet.deleteRow(i + 1);
         
         // Reset hasIssueLog in DB_ReceivingRecords
@@ -572,10 +856,92 @@ function deleteIssueLogRecord(id) {
         }
         
         SpreadsheetApp.flush();
+        clearPurchasingCache();
+
+        logAuditEntry(clientMeta, 'DELETE', 'IssueLogRecord', id, detailStr);
+
         return { status: 'success', id: id };
       }
     }
     return { status: 'error', message: `Issue Log not found: ${id}` };
+  } catch (err) {
+    return { status: 'error', message: err.toString() };
+  }
+}
+
+/**
+ * Save / Update Defect Category (Master Data)
+ */
+function saveDefectCategory(categoryObj, clientMeta) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let sheet = ss.getSheetByName('DB_DefectCategories');
+    if (!sheet) {
+      setupPurchasingDatabase();
+      sheet = ss.getSheetByName('DB_DefectCategories');
+    }
+    const data = sheet.getDataRange().getValues();
+    const id = categoryObj.id || 'DEF-' + Date.now();
+    const rowData = [
+      id,
+      categoryObj.name || '',
+      categoryObj.description || '',
+      categoryObj.isActive !== false
+    ];
+
+    let found = false;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === String(id)) {
+        sheet.getRange(i + 1, 1, 1, rowData.length).setValues([rowData]);
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      sheet.appendRow(rowData);
+    }
+
+    SpreadsheetApp.flush();
+    clearPurchasingCache();
+
+    logAuditEntry(
+      clientMeta,
+      found ? 'UPDATE' : 'CREATE',
+      'DefectCategory',
+      id,
+      `Name: ${categoryObj.name} | Description: ${categoryObj.description || '-'} | Status: ${categoryObj.isActive !== false ? 'Active' : 'Inactive'}`
+    );
+
+    return { status: 'success', data: { ...categoryObj, id: id } };
+  } catch (err) {
+    return { status: 'error', message: err.toString() };
+  }
+}
+
+/**
+ * Delete Defect Category (Master Data)
+ */
+function deleteDefectCategory(id, clientMeta) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss.getSheetByName('DB_DefectCategories');
+    if (!sheet) return { status: 'error', message: 'DB_DefectCategories not found' };
+    
+    const data = sheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === String(id)) {
+        const catData = data[i];
+        const detailStr = `Name: ${catData[1]} | Description: ${catData[2] || '-'} | Status: ${catData[3] ? 'Active' : 'Inactive'}`;
+        sheet.deleteRow(i + 1);
+        SpreadsheetApp.flush();
+        clearPurchasingCache();
+
+        logAuditEntry(clientMeta, 'DELETE', 'DefectCategory', id, detailStr);
+
+        return { status: 'success', id: id };
+      }
+    }
+    return { status: 'error', message: `Defect Category not found: ${id}` };
   } catch (err) {
     return { status: 'error', message: err.toString() };
   }
@@ -623,4 +989,59 @@ function getSheetDataAsObjects(ss, sheetName) {
   }
 
   return results;
+}
+
+/**
+ * Log Audit Entry into Audit_Logs sheet
+ */
+function logAuditEntry(clientMeta, action, moduleName, recordId, details) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let sheet = ss.getSheetByName('Audit_Logs');
+    if (!sheet) {
+      sheet = ss.insertSheet('Audit_Logs');
+      sheet.appendRow([
+        'Timestamp',
+        'Action',
+        'Module',
+        'Record ID / Target',
+        'Action Details',
+        'Client IP',
+        'Device & OS',
+        'User Session'
+      ]);
+      const headerRange = sheet.getRange(1, 1, 1, 8);
+      headerRange.setFontWeight('bold');
+      headerRange.setBackground('#0f172a');
+      headerRange.setFontColor('#ffffff');
+      sheet.setFrozenRows(1);
+    }
+
+    const timestamp = Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd HH:mm:ss');
+    const ip = (clientMeta && clientMeta.ip) ? clientMeta.ip : 'Unknown IP';
+    const deviceInfo = (clientMeta && clientMeta.deviceInfo) ? clientMeta.deviceInfo : (clientMeta && clientMeta.userAgent ? clientMeta.userAgent : 'Unknown Device');
+    let userEmail = 'Session User';
+    try {
+      const activeUser = Session.getActiveUser().getEmail();
+      if (activeUser) userEmail = activeUser;
+      else if (clientMeta && clientMeta.sessionId) userEmail = clientMeta.sessionId;
+    } catch(e) {
+      if (clientMeta && clientMeta.sessionId) userEmail = clientMeta.sessionId;
+    }
+
+    const detailsStr = typeof details === 'object' ? JSON.stringify(details) : String(details || '');
+
+    sheet.appendRow([
+      timestamp,
+      action,
+      moduleName,
+      String(recordId || ''),
+      detailsStr,
+      ip,
+      deviceInfo,
+      userEmail
+    ]);
+  } catch (err) {
+    Logger.log('logAuditEntry error: ' + err.toString());
+  }
 }

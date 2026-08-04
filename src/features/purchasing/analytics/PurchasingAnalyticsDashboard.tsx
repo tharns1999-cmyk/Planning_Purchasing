@@ -1,20 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import {
-  BarChart3,
-  TrendingUp,
-  AlertTriangle,
-  Award,
-  Download,
-  Search,
-  CheckCircle2,
-  XCircle,
-  ShieldAlert,
-  Calendar,
-  Scale,
-  PieChart as PieIcon,
-  Layers,
-  Filter,
-} from 'lucide-react';
+import { X, CheckCircle2, XCircle } from 'lucide-react';
+import { motion } from 'motion/react';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -35,7 +21,6 @@ import { AutocompleteSelect, SelectOption } from '@/components/ui/AutocompleteSe
 import {
   ReceivingRecord,
   IssueLogRecord,
-  DEFECT_CATEGORIES,
   exportToCSV,
   Supplier,
   RMItem
@@ -48,13 +33,6 @@ interface PurchasingAnalyticsDashboardProps {
   rmItems?: RMItem[];
 }
 
-const CATEGORY_COLORS: Record<string, string> = {
-  'สิ่งแปลกปลอม / สิ่งปนเปื้อน (Foreign Matters / Pests)': '#ef4444',
-  'คุณภาพเสื่อมสภาพ / สดไม่ได้มาตรฐาน (Degradation / Freshness)': '#f59e0b',
-  'ขนาด / สเปกไม่ได้มาตรฐาน (Non-conformance / Off-Spec)': '#3b82f6',
-  'บรรจุภัณฑ์และการขนส่ง (Packaging & Transport Issues)': '#06b6d4',
-  'อื่น ๆ (Others)': '#8b5cf6',
-};
 
 export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboardProps> = ({
   receivingRecords,
@@ -69,6 +47,8 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [activeDatePreset, setActiveDatePreset] = useState<'ALL' | 'THIS_MONTH' | 'LAST_3_MONTHS' | 'THIS_YEAR'>('ALL');
+  const [trendGranularity, setTrendGranularity] = useState<'DAILY' | 'WEEKLY' | 'MONTHLY'>('WEEKLY');
+
 
   // Table Filters
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -162,6 +142,27 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
     }
   };
 
+  const isAnyFilterActive = useMemo(() => {
+    return Boolean(
+      startDate ||
+      endDate ||
+      selectedSupplierFilter !== 'ALL' ||
+      selectedRmFilter !== 'ALL' ||
+      selectedCategoryFilter !== 'ALL' ||
+      selectedStatusFilter !== 'ALL'
+    );
+  }, [startDate, endDate, selectedSupplierFilter, selectedRmFilter, selectedCategoryFilter, selectedStatusFilter]);
+
+  const handleResetFilters = () => {
+    setStartDate('');
+    setEndDate('');
+    setActiveDatePreset('ALL');
+    setSelectedSupplierFilter('ALL');
+    setSelectedRmFilter('ALL');
+    setSelectedCategoryFilter('ALL');
+    setSelectedStatusFilter('ALL');
+  };
+
   // Filtered master records by Date Range & Dropdown Filters
   const globalFilteredReceivingRecords = useMemo(() => {
     return receivingRecords.filter((rec) => {
@@ -223,56 +224,86 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
   // 2. Data Preparation for Charts (Filtered by Date Range)
   // -------------------------------------------------------------
 
-  // Helper: Format date to Thai Month & Year (e.g. "ก.ค. 26")
-  const getMonthYearLabel = (dateStr: string): string => {
+  // Helper: Get ISO Week Number
+  const getISOWeek = (date: Date) => {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  };
+
+  // Helper: Format date string based on granularity
+  const getTimeLabel = (dateStr: string, granularity: 'DAILY' | 'WEEKLY' | 'MONTHLY'): string => {
     if (!dateStr) return '';
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return '';
-    const thaiMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
-    const month = thaiMonths[d.getMonth()];
-    const yr = (d.getFullYear() + 543).toString().slice(-2);
-    return `${month} ${yr}`;
+    
+    if (granularity === 'DAILY') {
+      const p = dateStr.split('-');
+      if (p.length !== 3) return dateStr;
+      return `${parseInt(p[2], 10)}/${parseInt(p[1], 10)}`; // DD/MM
+    } else if (granularity === 'WEEKLY') {
+      const wk = getISOWeek(d);
+      const yr = (d.getFullYear() + 543).toString().slice(-2);
+      return `W${wk} '${yr}`;
+    } else {
+      const thaiMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+      const month = thaiMonths[d.getMonth()];
+      const yr = (d.getFullYear() + 543).toString().slice(-2);
+      return `${month} '${yr}`;
+    }
   };
 
-  // A. Monthly Quality Trend Data (Dynamic from Date-filtered records)
-  const monthlyTrendData = useMemo(() => {
+  // A. Quality Trend Data (Dynamic from Date-filtered records & Granularity)
+  const trendData = useMemo(() => {
     if (globalFilteredReceivingRecords.length === 0) return [];
 
-    const monthMap: Record<
+    const timeMap: Record<
       string,
-      { month: string; totalBills: number; passBills: number; totalKg: number; postProdKg: number; timestamp: number }
+      { label: string; totalBills: number; passBills: number; totalKg: number; postProdKg: number; sortKey: number }
     > = {};
 
     globalFilteredReceivingRecords.forEach((rec) => {
       const d = new Date(rec.receiveDate);
-      const timestamp = isNaN(d.getTime()) ? 0 : d.getTime();
-      const monthLabel = getMonthYearLabel(rec.receiveDate) || 'ไม่ระบุ';
-
-      if (!monthMap[monthLabel]) {
-        monthMap[monthLabel] = { month: monthLabel, totalBills: 0, passBills: 0, totalKg: 0, postProdKg: 0, timestamp };
+      if (isNaN(d.getTime())) return;
+      
+      let sortKey = 0;
+      if (trendGranularity === 'DAILY') {
+        sortKey = d.getTime();
+      } else if (trendGranularity === 'WEEKLY') {
+        sortKey = d.getFullYear() * 100 + getISOWeek(d);
+      } else {
+        sortKey = d.getFullYear() * 100 + d.getMonth();
       }
-      const entry = monthMap[monthLabel]!;
+
+      const label = getTimeLabel(rec.receiveDate, trendGranularity) || 'ไม่ระบุ';
+
+      if (!timeMap[label]) {
+        timeMap[label] = { label, totalBills: 0, passBills: 0, totalKg: 0, postProdKg: 0, sortKey };
+      }
+      const entry = timeMap[label]!;
       entry.totalBills += 1;
       if (rec.isPass) entry.passBills += 1;
       entry.totalKg += rec.receiveQty || 0;
       entry.postProdKg += rec.postProductionDefectQty || 0;
     });
 
-    return Object.values(monthMap)
-      .sort((a, b) => a.timestamp - b.timestamp)
+    return Object.values(timeMap)
+      .sort((a, b) => a.sortKey - b.sortKey)
       .map((m) => {
         const passRate = m.totalBills > 0 ? Number(((m.passBills / m.totalBills) * 100).toFixed(1)) : 0;
         const defectRate = Number((100 - passRate).toFixed(1));
         const postProdDefectRate = m.totalKg > 0 ? Number(((m.postProdKg / m.totalKg) * 100).toFixed(2)) : 0;
         return {
-          month: m.month,
+          label: m.label,
           passRate,
           defectRate,
           postProdDefectRate,
           totalKg: m.totalKg,
         };
       });
-  }, [globalFilteredReceivingRecords]);
+  }, [globalFilteredReceivingRecords, trendGranularity]);
 
   // B. Supplier Defect Ranking Data (Only include suppliers with fail bills)
   const supplierRankingData = useMemo(() => {
@@ -308,11 +339,12 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
         supplier: item.name.length > 15 ? item.name.substring(0, 14) + '...' : item.name,
         fullName: item.name,
         failCount: item.failBills,
+        totalBills: item.totalBills,
         defectKg: Number(item.totalDefectKg.toFixed(1)),
         postProdKg: Number(item.postProdKg.toFixed(1)),
         failRate: item.totalBills > 0 ? Number(((item.failBills / item.totalBills) * 100).toFixed(1)) : 0,
       }))
-      .sort((a, b) => b.failCount - a.failCount || b.postProdKg - a.postProdKg);
+      .sort((a, b) => b.failRate - a.failRate || b.failCount - a.failCount);
   }, [globalFilteredReceivingRecords]);
 
   // C. RM Category Breakdown Data (Only include categories with > 0 defect kg)
@@ -355,79 +387,6 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
       }))
       .filter((item) => item.value > 0);
   }, [globalFilteredReceivingRecords, rmItems]);
-
-  const defectCausesData = useMemo(() => {
-    if (globalFilteredIssueLogs.length === 0 && globalFilteredReceivingRecords.filter((r) => !r.isPass).length === 0) {
-      return [];
-    }
-
-    const categoryCounts: Record<string, { routineCases: number; escalatedCases: number; routineKg: number; escalatedKg: number }> = {};
-
-    DEFECT_CATEGORIES.forEach((cat) => {
-      categoryCounts[cat] = { routineCases: 0, escalatedCases: 0, routineKg: 0, escalatedKg: 0 };
-    });
-
-    globalFilteredIssueLogs.forEach((issue) => {
-      const cat = issue.defectCategory || DEFECT_CATEGORIES[0];
-      if (!categoryCounts[cat]) {
-        categoryCounts[cat] = { routineCases: 0, escalatedCases: 0, routineKg: 0, escalatedKg: 0 };
-      }
-      const countEntry = categoryCounts[cat]!;
-      countEntry.escalatedCases += 1;
-      countEntry.escalatedKg += issue.problemQty || 0;
-    });
-
-    globalFilteredReceivingRecords
-      .filter((r) => !r.isPass)
-      .forEach((r) => {
-        if (!r.hasIssueLog) {
-          const remarkText = (r.remark || '').toLowerCase();
-          let cat: string = DEFECT_CATEGORIES[0];
-          if (remarkText.includes('แมลง') || remarkText.includes('ขี้หนู') || remarkText.includes('แปลกปลอม')) {
-            cat = DEFECT_CATEGORIES[0];
-          } else if (remarkText.includes('แก่') || remarkText.includes('เน่า') || remarkText.includes('สด')) {
-            cat = DEFECT_CATEGORIES[1];
-          } else if (remarkText.includes('spec') || remarkText.includes('ขนาด')) {
-            cat = DEFECT_CATEGORIES[2];
-          } else if (remarkText.includes('กลิ่น') || remarkText.includes('น้ำแข็ง') || remarkText.includes('ขนส่ง')) {
-            cat = DEFECT_CATEGORIES[3];
-          }
-          if (!categoryCounts[cat]) {
-            categoryCounts[cat] = { routineCases: 0, escalatedCases: 0, routineKg: 0, escalatedKg: 0 };
-          }
-          const countEntry = categoryCounts[cat]!;
-          countEntry.routineCases += 1;
-          countEntry.routineKg += r.defectQty || 0;
-        }
-      });
-
-    const totalCountSum = Object.values(categoryCounts).reduce((sum, item) => sum + item.routineCases + item.escalatedCases, 0);
-
-    return DEFECT_CATEGORIES.map((cat) => {
-      const item = categoryCounts[cat] || { routineCases: 0, escalatedCases: 0, routineKg: 0, escalatedKg: 0 };
-      const totalCases = item.routineCases + item.escalatedCases;
-      const totalKg = item.routineKg + item.escalatedKg;
-      const percent = totalCountSum > 0 ? Number(((totalCases / totalCountSum) * 100).toFixed(1)) : 0;
-      let shortLabel = (cat || '').split('(')[0]?.trim() || '';
-      if (shortLabel.length > 18) {
-        shortLabel = shortLabel.substring(0, 16) + '...';
-      }
-      return {
-        category: cat,
-        shortLabel,
-        totalCases,
-        routineCases: item.routineCases,
-        escalatedCases: item.escalatedCases,
-        routineKg: Number(item.routineKg.toFixed(1)),
-        escalatedKg: Number(item.escalatedKg.toFixed(1)),
-        totalKg: Number(totalKg.toFixed(1)),
-        percent,
-        color: CATEGORY_COLORS[cat] || '#8b5cf6',
-      };
-    })
-      .filter((item) => item.totalCases > 0)
-      .sort((a, b) => b.totalCases - a.totalCases);
-  }, [globalFilteredIssueLogs, globalFilteredReceivingRecords]);
 
   // Top Defect RM Items (New Bar Chart)
   const topDefectRmsData = useMemo(() => {
@@ -488,7 +447,7 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
   const handleExportCSV = () => {
     const exportData = filteredRecords.map((r) => ({
       'Bill No': r.billNo,
-      'Receive Date': r.receiveDate,
+      'Receive Date': r.receiveDate ? r.receiveDate.split('T')[0] : '',
       'Supplier': r.supplierName,
       'RM Name': r.rmName,
       'Category': r.rmCategory,
@@ -503,144 +462,185 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
     exportToCSV(`Purchasing_QC_Analytics_${new Date().toISOString().split('T')[0]}`, exportData);
   };
 
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: { staggerChildren: 0.03 }
+    }
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 15 },
+    show: { opacity: 1, y: 0, transition: { type: "spring" as const, stiffness: 500, damping: 25 } }
+  };
+
   return (
     <div className="space-y-8">
-      {/* Date Range Filter Control Bar */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-sky-100 text-sky-700">
-            <Calendar className="w-5 h-5" />
+      {/* ------------------------------------------------------------- */}
+      {/* UNIFIED ANALYTICS FILTER & TIME RANGE TOOLBAR CARD */}
+      {/* ------------------------------------------------------------- */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-4 sm:p-5 space-y-4">
+        {/* Row 1: Date Range Presets & Pickers */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 uppercase tracking-wider">
+            <span className="text-xs">📅</span>
+            <span>ช่วงเวลาข้อมูล (Date Range):</span>
           </div>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Quick Presets */}
+            <div className="inline-flex items-center bg-slate-100/90 p-1 rounded-xl border border-slate-200/80 text-xs font-medium">
+              <button
+                type="button"
+                onClick={() => handleDatePresetChange('ALL')}
+                className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                  activeDatePreset === 'ALL'
+                    ? 'bg-white text-slate-900 font-semibold shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                ทั้งหมด
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDatePresetChange('THIS_MONTH')}
+                className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                  activeDatePreset === 'THIS_MONTH'
+                    ? 'bg-white text-slate-900 font-semibold shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                เดือนนี้
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDatePresetChange('LAST_3_MONTHS')}
+                className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                  activeDatePreset === 'LAST_3_MONTHS'
+                    ? 'bg-white text-slate-900 font-semibold shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                3 เดือนล่าสุด
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDatePresetChange('THIS_YEAR')}
+                className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
+                  activeDatePreset === 'THIS_YEAR'
+                    ? 'bg-white text-slate-900 font-semibold shadow-2xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                ปีนี้
+              </button>
+            </div>
+
+            {/* Custom Date Pickers */}
+            <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200 text-xs">
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => {
+                  setStartDate(e.target.value);
+                  setActiveDatePreset('ALL');
+                }}
+                className="h-7 px-1.5 bg-white border border-slate-200 rounded-lg font-medium text-slate-800 focus:outline-none focus:border-sky-500"
+              />
+              <span className="text-slate-400">ถึง</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => {
+                  setEndDate(e.target.value);
+                  setActiveDatePreset('ALL');
+                }}
+                className="h-7 px-1.5 bg-white border border-slate-200 rounded-lg font-medium text-slate-800 focus:outline-none focus:border-sky-500"
+              />
+            </div>
+
+            {/* Reset Filters (if active) */}
+            {isAnyFilterActive && (
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/60 text-xs font-medium transition-all cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>ล้างตัวกรอง</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Row 2: Dimensional Filters Grid */}
+        <div className="pt-3 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Supplier Filter */}
           <div>
-            <h3 className="text-base font-normal text-slate-900">
-              ตัวกรองช่วงเวลาวิเคราะห์ (Date Range Filter)
-            </h3>
-            <p className="text-sm text-slate-500">
-              เลือกช่วงเวลาเพื่อปรับเปลี่ยนข้อมูลสถิติตามต้องการ
-            </p>
-          </div>
-        </div>
-
-        {/* Date Inputs & Presets */}
-        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-          {/* Quick Presets */}
-          <div className="inline-flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-sm font-normal">
-            <button
-              type="button"
-              onClick={() => handleDatePresetChange('ALL')}
-              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                activeDatePreset === 'ALL'
-                  ? 'bg-white text-slate-900 shadow-xs font-normal'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              ทั้งหมด
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDatePresetChange('THIS_MONTH')}
-              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                activeDatePreset === 'THIS_MONTH'
-                  ? 'bg-white text-slate-900 shadow-xs font-normal'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              เดือนนี้
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDatePresetChange('LAST_3_MONTHS')}
-              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                activeDatePreset === 'LAST_3_MONTHS'
-                  ? 'bg-white text-slate-900 shadow-xs font-normal'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              3 เดือนล่าสุด
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDatePresetChange('THIS_YEAR')}
-              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                activeDatePreset === 'THIS_YEAR'
-                  ? 'bg-white text-slate-900 shadow-xs font-normal'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              ปีนี้
-            </button>
-          </div>
-
-          {/* Custom Date Pickers */}
-          <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-200 text-sm">
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => {
-                setStartDate(e.target.value);
-                setActiveDatePreset('ALL');
-              }}
-              className="h-8 px-2 bg-white border border-slate-300 rounded-lg font-normal text-slate-800 focus:outline-none"
-            />
-            <span className="text-slate-400 font-normal">ถึง</span>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => {
-                setEndDate(e.target.value);
-                setActiveDatePreset('ALL');
-              }}
-              className="h-8 px-2 bg-white border border-slate-300 rounded-lg font-normal text-slate-800 focus:outline-none"
+            <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+              ผู้ส่งมอบ (Supplier)
+            </label>
+            <AutocompleteSelect
+              options={supplierFilterOptions}
+              value={selectedSupplierFilter}
+              onChange={(val) => setSelectedSupplierFilter(val || 'ALL')}
+              placeholder="Supplier ทั้งหมด"
+              searchPlaceholder="พิมพ์ชื่อ Supplier..."
             />
           </div>
-        </div>
-      </div>
 
-      {/* Global Dropdown Filters */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-wrap items-center gap-4">
-        <div className="flex items-center gap-2 w-full md:w-auto text-sm text-slate-500 font-normal">
-          <Filter className="w-4 h-4 text-slate-400" /> ตัวกรองเพิ่มเติม:
-        </div>
-        <div className="flex-1 min-w-[200px]">
-          <AutocompleteSelect
-            options={supplierFilterOptions}
-            value={selectedSupplierFilter}
-            onChange={(val) => setSelectedSupplierFilter(val || 'ALL')}
-            placeholder="Supplier ทั้งหมด"
-            searchPlaceholder="พิมพ์ชื่อ Supplier..."
-          />
-        </div>
-        <div className="flex-1 min-w-[200px]">
-          <AutocompleteSelect
-            options={rmFilterOptions}
-            value={selectedRmFilter}
-            onChange={(val) => setSelectedRmFilter(val || 'ALL')}
-            placeholder="วัตถุดิบ (RM) ทั้งหมด"
-            searchPlaceholder="พิมพ์ชื่อวัตถุดิบ..."
-          />
-        </div>
-        <div className="flex-1 min-w-[200px]">
-          <AutocompleteSelect
-            options={categoryFilterOptions}
-            value={selectedCategoryFilter}
-            onChange={(val) => setSelectedCategoryFilter(val || 'ALL')}
-            placeholder="ทุกหมวดหมู่ RM"
-          />
-        </div>
-        <div className="flex-1 min-w-[150px]">
-          <AutocompleteSelect
-            options={statusFilterOptions}
-            value={selectedStatusFilter}
-            onChange={(val) => setSelectedStatusFilter((val as 'ALL' | 'PASS' | 'FAIL') || 'ALL')}
-            placeholder="ทุกผลตรวจ"
-          />
+          {/* RM Filter */}
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+              วัตถุดิบ (RM)
+            </label>
+            <AutocompleteSelect
+              options={rmFilterOptions}
+              value={selectedRmFilter}
+              onChange={(val) => setSelectedRmFilter(val || 'ALL')}
+              placeholder="วัตถุดิบทั้งหมด"
+              searchPlaceholder="พิมพ์ชื่อวัตถุดิบ..."
+            />
+          </div>
+
+          {/* Category Filter */}
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+              หมวดหมู่ RM (Category)
+            </label>
+            <AutocompleteSelect
+              options={categoryFilterOptions}
+              value={selectedCategoryFilter}
+              onChange={(val) => setSelectedCategoryFilter(val || 'ALL')}
+              placeholder="ทุกหมวดหมู่ RM"
+            />
+          </div>
+
+          {/* Status Filter */}
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+              ผลการตรวจ (Status)
+            </label>
+            <AutocompleteSelect
+              options={statusFilterOptions}
+              value={selectedStatusFilter}
+              onChange={(val) => setSelectedStatusFilter((val as 'ALL' | 'PASS' | 'FAIL') || 'ALL')}
+              placeholder="ทุกผลตรวจ"
+            />
+          </div>
         </div>
       </div>
 
       {/* 1. Top Executive KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+      <motion.div 
+        variants={containerVariants}
+        initial="hidden"
+        animate="show"
+        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5"
+      >
         {/* Total Volume */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex items-center justify-between">
+        <motion.div variants={itemVariants} className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-sm font-normal text-slate-500 uppercase tracking-wider">
               ปริมาณรับเข้ารวม (Total Volume)
@@ -654,12 +654,12 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
             </p>
           </div>
           <div className="p-3.5 rounded-2xl bg-emerald-100 text-emerald-700">
-            <Scale className="w-6 h-6" />
+            <span className="text-xl">⚖️</span>
           </div>
-        </div>
+        </motion.div>
 
         {/* Overall Pass Rate */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex items-center justify-between">
+        <motion.div variants={itemVariants} className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-sm font-normal text-slate-500 uppercase tracking-wider">
               อัตราผ่านการสุ่มตรวจ (Pass Rate)
@@ -683,12 +683,12 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
                 : 'bg-rose-100 text-rose-700'
             }`}
           >
-            <TrendingUp className="w-6 h-6" />
+            <span className="text-xl">📈</span>
           </div>
-        </div>
+        </motion.div>
 
         {/* Post-Production Defect Volume */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex items-center justify-between">
+        <motion.div variants={itemVariants} className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-sm font-normal text-slate-500 uppercase tracking-wider">
               ปัญหาหลังการผลิต (Post-Prod Defect)
@@ -702,12 +702,12 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
             </p>
           </div>
           <div className="p-3.5 rounded-2xl bg-rose-100 text-rose-700">
-            <ShieldAlert className="w-6 h-6" />
+            <span className="text-xl">🚨</span>
           </div>
-        </div>
+        </motion.div>
 
         {/* Active QC Issues */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex items-center justify-between">
+        <motion.div variants={itemVariants} className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
             <p className="text-sm font-normal text-slate-500 uppercase tracking-wider">
               รายการปัญหาคุณภาพเปิดอยู่ (Active QC Issues)
@@ -716,87 +716,77 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
               {activeIssuesCount} <span className="text-sm text-slate-500 font-normal">รายการ</span>
             </h3>
             <p className="text-sm text-slate-500 mt-1">
-              ต้องติดตามมาตรการแก้ไข (FM-PC-28)
+              ต้องติดตามการดำเนินการแก้ไข
             </p>
           </div>
           <div className="p-3.5 rounded-2xl bg-amber-100 text-amber-700">
-            <AlertTriangle className="w-6 h-6" />
+            <span className="text-xl">⚠️</span>
           </div>
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
 
-      {/* 2. Smart Insights & Actionable Recommendations */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 rounded-2xl p-6 text-white shadow-md flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border border-slate-700">
-        <div className="flex items-center gap-4">
-          <div className="p-3 rounded-2xl bg-sky-500/20 text-sky-300 border border-sky-500/30">
-            <BarChart3 className="w-8 h-8" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-lg font-normal">ข้อสรุปการประเมินคุณภาพจัดซื้อประจำช่วงเวลา</h3>
-              <span className="text-sm font-normal px-2.5 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-400/30">
-                AI Executive Brief
-              </span>
-            </div>
-            {globalFilteredReceivingRecords.length === 0 ? (
-              <p className="text-sm text-slate-300 mt-1 max-w-3xl leading-relaxed">
-                ยังไม่พบข้อมูลประวัติการตรวจรับวัตถุดิบและปัญหาคุณภาพในช่วงเวลาที่เลือก สามารถเริ่มบันทึกการรับเข้าใหม่ที่เมนู{' '}
-                <strong className="text-sky-300">"บันทึกรับเข้าวัตถุดิบ"</strong> ระบบจะประมวลผลวิเคราะห์สรุปให้โดยอัตโนมัติ
-              </p>
-            ) : (
-              <p className="text-sm text-slate-300 mt-1 max-w-3xl leading-relaxed">
-                จากการวิเคราะห์ข้อมูลประวัติการตรวจรับจำนวน{' '}
-                <strong className="text-sky-300 font-normal">{globalFilteredReceivingRecords.length} บิล</strong>{' '}
-                พบอัตราผ่านคุณภาพรวมอยู่ที่ <strong className="text-emerald-400 font-normal">{overallPassRate}%</strong>{' '}
-                {categoryBreakdownData.length > 0 && (
-                  <>
-                    โดยหมวดหมู่ที่มีของเสียสูงสุดคือ <strong className="text-rose-400 font-normal">{categoryBreakdownData[0]?.name}</strong>{' '}
-                  </>
-                )}
-                {defectCausesData.length > 0 && (
-                  <>
-                    มีสาเหตุหลักมาจาก <strong className="text-amber-300 font-normal">{defectCausesData[0]?.category}</strong>{' '}
-                  </>
-                )}
-                {supplierRankingData.length > 0 && (
-                  <>
-                    แนะนำให้ติดตามมาตรการปรับปรุงคุณภาพร่วมกับ Supplier <strong className="text-rose-300 font-normal">{supplierRankingData[0]?.fullName}</strong> เพื่อลดของเสียในอนาคต
-                  </>
-                )}
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
 
       {/* 3. Recharts Section (Grid 2 Columns) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Chart 1: Monthly Quality Pass Trend */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
-          <div className="flex items-center justify-between mb-4">
+        {/* Chart 1: Quality Pass Trend (Toggleable) */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-col">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
             <div>
               <h3 className="text-lg font-normal text-slate-900 flex items-center gap-2">
-                <TrendingUp className="w-4 h-4 text-emerald-600" />
+                <span className="text-base">📈</span>
                 1. แนวโน้มเปอร์เซ็นต์การตรวจผ่านคุณภาพ (Quality Pass Rate Trend)
               </h3>
               <p className="text-sm text-slate-500 mt-0.5">
-                เปรียบเทียบ % PASS และ % FAIL ในแต่ละเดือน
+                เปรียบเทียบ % PASS และ % FAIL
               </p>
+            </div>
+            {/* Granularity Toggle */}
+            <div className="flex items-center bg-slate-100/80 p-1 rounded-xl border border-slate-200/60 text-xs font-medium self-start sm:self-auto">
+              <button
+                onClick={() => setTrendGranularity('DAILY')}
+                className={`px-3 py-1.5 rounded-lg transition-all ${
+                  trendGranularity === 'DAILY'
+                    ? 'bg-white text-emerald-700 shadow-2xs border border-slate-200/50'
+                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+                }`}
+              >
+                รายวัน
+              </button>
+              <button
+                onClick={() => setTrendGranularity('WEEKLY')}
+                className={`px-3 py-1.5 rounded-lg transition-all ${
+                  trendGranularity === 'WEEKLY'
+                    ? 'bg-white text-emerald-700 shadow-2xs border border-slate-200/50'
+                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+                }`}
+              >
+                รายสัปดาห์
+              </button>
+              <button
+                onClick={() => setTrendGranularity('MONTHLY')}
+                className={`px-3 py-1.5 rounded-lg transition-all ${
+                  trendGranularity === 'MONTHLY'
+                    ? 'bg-white text-emerald-700 shadow-2xs border border-slate-200/50'
+                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+                }`}
+              >
+                รายเดือน
+              </button>
             </div>
           </div>
 
-          {monthlyTrendData.length === 0 ? (
-            <div className="h-64 w-full flex flex-col items-center justify-center bg-slate-50/50 rounded-xl border border-dashed border-slate-200 p-6 text-center">
-              <TrendingUp className="w-10 h-10 text-slate-300 mb-2" />
+          {trendData.length === 0 ? (
+            <div className="h-64 w-full flex flex-col items-center justify-center bg-slate-50/50 rounded-xl border border-dashed border-slate-200 p-6 text-center mt-auto mb-auto">
+              <span className="text-3xl mb-2 opacity-40">📈</span>
               <p className="text-sm font-normal text-slate-600">ยังไม่มีข้อมูลแนวโน้มคุณภาพ</p>
               <p className="text-sm text-slate-400 mt-0.5 max-w-xs">
                 ระบบจะพล็อตกราฟแนวโน้มอัตโนมัติเมื่อเริ่มบันทึกประวัติการตรวจรับเข้าวัตถุดิบ
               </p>
             </div>
           ) : (
-            <div className="h-64 w-full">
+            <div className="h-64 w-full mt-auto">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={monthlyTrendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <AreaChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorPass" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
@@ -808,7 +798,7 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#64748b' }} />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#64748b' }} />
                   <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: '#64748b' }} />
                   <Tooltip
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -829,18 +819,18 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-lg font-normal text-slate-900 flex items-center gap-2">
-                <Award className="w-4 h-4 text-rose-600" />
+                <span className="text-base">🥇</span>
                 2. จัดอันดับผู้ส่งมอบที่มีปัญหาคุณภาพสูงสุด (Supplier Defect Ranking)
               </h3>
               <p className="text-sm text-slate-500 mt-0.5">
-                เรียงตามจำนวนครั้งที่สุ่มตรวจไม่ผ่าน (FAIL Count)
+                เรียงตามเปอร์เซ็นต์อัตราการสุ่มตรวจไม่ผ่าน (Fail Rate %)
               </p>
             </div>
           </div>
 
           {supplierRankingData.length === 0 ? (
             <div className="h-64 w-full flex flex-col items-center justify-center bg-slate-50/50 rounded-xl border border-dashed border-slate-200 p-6 text-center">
-              <Award className="w-10 h-10 text-slate-300 mb-2" />
+              <span className="text-3xl mb-2 opacity-40">🥇</span>
               <p className="text-sm font-normal text-slate-600">ยังไม่มีข้อมูลจัดอันดับ Supplier ไม่ผ่านเกณฑ์</p>
               <p className="text-sm text-slate-400 mt-0.5 max-w-xs">
                 ระบบจะจัดอันดับผู้ส่งมอบที่มีบิลตรวจไม่ผ่าน (FAIL) โดยอัตโนมัติเมื่อพบของเสีย
@@ -852,16 +842,16 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
                 <BarChart data={supplierRankingData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="supplier" tick={{ fontSize: 10, fill: '#64748b' }} />
-                  <YAxis tick={{ fontSize: 11, fill: '#64748b' }} allowDecimals={false} />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: '#64748b' }} allowDecimals={false} />
                   <Tooltip
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     formatter={(value: any, _name: any, item: any) => [
-                      `${value} บิลที่ไม่ผ่าน (ของเสีย ${item?.payload?.defectKg || 0} kg / Fail Rate ${item?.payload?.failRate || 0}%)`,
+                      `${value}% (จาก ${item?.payload?.totalBills || 0} บิล / เสีย ${item?.payload?.defectKg || 0} kg)`,
                       item?.payload?.fullName || '',
                     ]}
                     contentStyle={{ backgroundColor: '#0f172a', borderRadius: '12px', color: '#fff', border: 'none' }}
                   />
-                  <Bar dataKey="failCount" name="จำนวนบิลที่ไม่ผ่าน (FAIL)" fill="#f43f5e" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="failRate" name="อัตราการไม่ผ่าน (Fail Rate %)" fill="#f43f5e" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -873,7 +863,7 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-lg font-normal text-slate-900 flex items-center gap-2">
-                <PieIcon className="w-4 h-4 text-sky-600" />
+                <span className="text-base">📊</span>
                 3. สัดส่วนน้ำหนักของเสียตามหมวดหมู่ (Defect Vol by RM Category)
               </h3>
               <p className="text-sm text-slate-500 mt-1">
@@ -884,7 +874,7 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
 
           {categoryBreakdownData.length === 0 ? (
             <div className="h-64 w-full flex flex-col items-center justify-center bg-slate-50/50 rounded-xl border border-dashed border-slate-200 p-6 text-center">
-              <PieIcon className="w-10 h-10 text-slate-300 mb-2" />
+              <span className="text-3xl mb-2 opacity-40">📊</span>
               <p className="text-sm font-normal text-slate-600">ยังไม่มีสัดส่วนน้ำหนักของเสีย</p>
               <p className="text-sm text-slate-400 mt-0.5 max-w-xs">
                 ไม่พบน้ำหนักของเสียแยกตามหมวดหมู่ในช่วงเวลาที่เลือก
@@ -925,7 +915,7 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-lg font-normal text-slate-900 flex items-center gap-2">
-                <Layers className="w-4 h-4 text-purple-600" />
+                <span className="text-base">📦</span>
                 4. วัตถุดิบที่มีของเสียสูงสุด (Top Defect RM Items)
               </h3>
               <p className="text-sm text-slate-500 mt-0.5">
@@ -936,7 +926,7 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
 
           {topDefectRmsData.length === 0 ? (
             <div className="h-64 w-full flex flex-col items-center justify-center bg-slate-50/50 rounded-xl border border-dashed border-slate-200 p-6 text-center">
-              <Layers className="w-10 h-10 text-slate-300 mb-2" />
+              <span className="text-3xl mb-2 opacity-40">📦</span>
               <p className="text-sm font-normal text-slate-600">ยังไม่มีข้อมูลวัตถุดิบที่มีของเสีย</p>
             </div>
           ) : (
@@ -975,7 +965,7 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
           <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
             {/* Search */}
             <div className="relative flex-1 md:w-56">
-              <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+              <span className="text-xs absolute left-3 top-2.5 opacity-50">🔍</span>
               <input
                 type="text"
                 value={searchQuery}
@@ -991,8 +981,8 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
               onClick={handleExportCSV}
               className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-normal text-sm rounded-xl shadow-xs transition-all cursor-pointer"
             >
-              <Download className="w-4 h-4" />
-              Export to CSV
+              <span className="text-xs">📥</span>
+              <span>Export to CSV</span>
             </button>
           </div>
         </div>
@@ -1025,7 +1015,7 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
               ) : (
                 paginatedAnalyticsRecords.map((r) => (
                   <tr key={r.id} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-3 px-4 font-mono text-slate-600">{r.receiveDate}</td>
+                    <td className="py-3 px-4 font-mono text-slate-600">{r.receiveDate ? r.receiveDate.split('T')[0] : '-'}</td>
                     <td className="py-3 px-4 font-mono font-normal text-slate-900">{r.billNo}</td>
                     <td className="py-3 px-4 font-normal text-slate-800">{r.supplierName}</td>
                     <td className="py-3 px-4">

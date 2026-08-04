@@ -7,8 +7,14 @@ import {
   Edit2,
   Trash2,
   CheckCircle2,
+  XCircle,
   X,
   Search,
+  Phone,
+  Mail,
+  MapPin,
+  User,
+  Tag,
 } from 'lucide-react';
 import { TablePagination } from '@/components/ui/TablePagination';
 import { AutocompleteSelect, SelectOption } from '@/components/ui/AutocompleteSelect';
@@ -17,6 +23,7 @@ import {
   Supplier,
   RMItem,
   DefectRule,
+  DefectCategoryItem,
   formatPhoneNumber,
 } from '@/services/DefectMatrixService';
 
@@ -33,6 +40,10 @@ interface PurchasingMasterDataModuleProps {
 
   defectMatrix: Record<string, DefectRule[]>;
   onUpdateDefectMatrix: (matrix: Record<string, DefectRule[]>) => void;
+
+  defectCategories?: DefectCategoryItem[];
+  onSaveDefectCategory?: (category: DefectCategoryItem) => void;
+  onDeleteDefectCategory?: (id: string) => void;
 }
 
 export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProps> = ({
@@ -46,9 +57,12 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
   onDeleteRMItem,
   defectMatrix = {},
   onUpdateDefectMatrix,
+  defectCategories = [],
+  onSaveDefectCategory,
+  onDeleteDefectCategory,
 }) => {
   // Sub-tab state
-  const [activeSubTab, setActiveSubTab] = useState<'suppliers' | 'rms' | 'matrix'>('suppliers');
+  const [activeSubTab, setActiveSubTab] = useState<'suppliers' | 'rms' | 'matrix' | 'defectCats'>('suppliers');
 
   // Search filter
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -61,7 +75,7 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
       'Type 3': 'สำเร็จรูป (Type 3)',
       'Type 4': 'ประมง (Type 4)',
     };
-    (rmItems || []).forEach(rm => {
+    (rmItems || []).forEach((rm) => {
       if (rm.category && rm.categoryLabel) {
         cats[rm.category] = rm.categoryLabel;
       }
@@ -76,16 +90,102 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
     }));
   }, [dynamicCategories]);
 
-  // Autocomplete Select Options
+  // Autocomplete Select Options for Suppliers
   const supplierSelectOptions: SelectOption[] = useMemo(
     () =>
       (suppliers || []).map((s) => ({
         value: s.id,
         label: s.name,
-        badge: s.code,
+        subtitle: `รหัส: ${s.code || s.id} • ${s.contactPerson || s.phone || 'ไม่มีเบอร์'}`,
       })),
     [suppliers]
   );
+
+  // Defect Category States
+  const [isCatModalOpen, setIsCatModalOpen] = useState<boolean>(false);
+  const [editingCat, setEditingCat] = useState<DefectCategoryItem | null>(null);
+  const [catName, setCatName] = useState<string>('');
+  const [catDesc, setCatDesc] = useState<string>('');
+  const [catIsActive, setCatIsActive] = useState<boolean>(true);
+
+  const filteredDefectCats = useMemo(() => {
+    if (!searchQuery.trim()) return defectCategories;
+    const q = searchQuery.toLowerCase();
+    return defectCategories.filter(
+      (c) => c.name.toLowerCase().includes(q) || (c.description || '').toLowerCase().includes(q)
+    );
+  }, [defectCategories, searchQuery]);
+
+  const handleOpenAddCat = () => {
+    setEditingCat(null);
+    setCatName('');
+    setCatDesc('');
+    setCatIsActive(true);
+    setIsCatModalOpen(true);
+  };
+
+  const handleOpenEditCat = (cat: DefectCategoryItem) => {
+    setEditingCat(cat);
+    setCatName(cat.name);
+    setCatDesc(cat.description || '');
+    setCatIsActive(cat.isActive !== false);
+    setIsCatModalOpen(true);
+  };
+
+  const handleToggleCatActive = (cat: DefectCategoryItem) => {
+    if (onSaveDefectCategory) {
+      onSaveDefectCategory({
+        ...cat,
+        isActive: cat.isActive === false ? true : false,
+      });
+    }
+  };
+
+  const handleSaveCatSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!catName.trim()) {
+      alert('กรุณาระบุชื่อหมวดหมู่ปัญหา');
+      return;
+    }
+    const newCat: DefectCategoryItem = {
+      id: editingCat ? editingCat.id : `DEF-${Date.now().toString().slice(-4)}`,
+      name: catName.trim(),
+      description: catDesc.trim(),
+      isActive: catIsActive,
+    };
+    if (onSaveDefectCategory) {
+      onSaveDefectCategory(newCat);
+    }
+    setIsCatModalOpen(false);
+  };
+
+  // Category Metadata for QC Matrix
+  const categoryMeta: Record<string, { icon: string; shortTitle: string; subtext: string; themeColor: string }> = {
+    'Type 1': {
+      icon: '🌾',
+      shortTitle: 'พืชเกษตร (Type 1)',
+      subtext: 'ยกเว้นผักใบ เช่น ข่า, มะพร้าว ฯลฯ',
+      themeColor: 'emerald',
+    },
+    'Type 2': {
+      icon: '🥬',
+      shortTitle: 'ผักใบ (Type 2)',
+      subtext: 'สมุนไพรสด เช่น ใบตอง, ใบมะกรูด ฯลฯ',
+      themeColor: 'lime',
+    },
+    'Type 3': {
+      icon: '🍱',
+      shortTitle: 'สำเร็จรูป (Type 3)',
+      subtext: 'วัตถุดิบสำเร็จรูป / สินค้าแปรรูป',
+      themeColor: 'amber',
+    },
+    'Type 4': {
+      icon: '🐟',
+      shortTitle: 'ประมง (Type 4)',
+      subtext: 'อาหารทะเล เช่น ปลาทู, กุ้ง ฯลฯ',
+      themeColor: 'cyan',
+    },
+  };
 
   // -----------------------------------------------------------------
   // 1. SUPPLIER MANAGEMENT MODALS & STATE
@@ -147,15 +247,15 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
 
       // Duplicate code check
       const isDuplicate = suppliers.some(
-        (s) => String(s.code || '').trim().toLowerCase() === codeStr.toLowerCase() &&
-               (!editingSupplier || s.id !== editingSupplier.id)
+        (s) =>
+          String(s.code || '').trim().toLowerCase() === codeStr.toLowerCase() &&
+          (!editingSupplier || s.id !== editingSupplier.id)
       );
       if (isDuplicate) {
         alert('รหัส Supplier นี้มีในระบบแล้ว กรุณาระบุรหัสใหม่');
         return;
       }
 
-      // Close modal first so UI is responsive even if save fails
       setIsSupplierModalOpen(false);
 
       if (editingSupplier) {
@@ -215,10 +315,12 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
     setRmCategory(rm.category);
     setRmUnit(rm.unit);
 
-    // Linked supplier IDs
-    const linkedIds = rm.supplierIds && rm.supplierIds.length > 0
-      ? rm.supplierIds
-      : [rm.supplierId];
+    const linkedIds =
+      rm.supplierIds && rm.supplierIds.length > 0
+        ? rm.supplierIds
+        : rm.supplierId
+        ? [rm.supplierId]
+        : [];
     setSelectedLinkedSupplierIds(linkedIds);
     setIsRmModalOpen(true);
   };
@@ -230,19 +332,22 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
       const nameStr = String(rmName || '').trim();
       const unitStr = String(rmUnit || '').trim();
 
-      if (!nameStr) return;
+      if (!nameStr) {
+        alert('กรุณากรอกชื่อวัตถุดิบ');
+        return;
+      }
 
       // Duplicate RM code check
       const isDuplicate = rmItems.some(
-        (rm) => String(rm.code || '').trim().toLowerCase() === codeStr.toLowerCase() &&
-                (!editingRm || rm.id !== editingRm.id)
+        (rm) =>
+          String(rm.code || '').trim().toLowerCase() === codeStr.toLowerCase() &&
+          (!editingRm || rm.id !== editingRm.id)
       );
       if (isDuplicate) {
         alert('รหัส RM นี้มีในระบบแล้ว กรุณาระบุรหัสใหม่');
         return;
       }
 
-      // Close modal first so UI is responsive even if save fails
       setIsRmModalOpen(false);
 
       const primarySup = suppliers.find((s) => selectedLinkedSupplierIds.includes(s.id)) || suppliers[0];
@@ -345,7 +450,6 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
       currentRules.push(newRule);
     }
 
-    // Sort by minQty
     currentRules.sort((a, b) => a.minQty - b.minQty);
 
     onUpdateDefectMatrix({
@@ -363,7 +467,8 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
       (s) =>
         String(s?.name || '').toLowerCase().includes(q) ||
         String(s?.code || '').toLowerCase().includes(q) ||
-        String(s?.phone || '').includes(searchQuery)
+        String(s?.phone || '').includes(searchQuery) ||
+        String(s?.contactPerson || '').toLowerCase().includes(q)
     );
   }, [suppliers, searchQuery]);
 
@@ -372,7 +477,8 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
     return (rmItems || []).filter(
       (r) =>
         String(r?.name || '').toLowerCase().includes(q) ||
-        String(r?.code || '').toLowerCase().includes(q)
+        String(r?.code || '').toLowerCase().includes(q) ||
+        String(r?.categoryLabel || r?.category || '').toLowerCase().includes(q)
     );
   }, [rmItems, searchQuery]);
 
@@ -414,63 +520,119 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
     return currentRulesList.slice(start, start + rulePageSize);
   }, [currentRulesList, rulePage, rulePageSize]);
 
+  // Category Badge Colors mapping for RM Table
+  const getCategoryBadgeClass = (catKey: string) => {
+    switch (catKey) {
+      case 'Type 1':
+        return 'bg-emerald-50 text-emerald-800 border-emerald-200';
+      case 'Type 2':
+        return 'bg-lime-50 text-lime-800 border-lime-200';
+      case 'Type 3':
+        return 'bg-amber-50 text-amber-800 border-amber-200';
+      case 'Type 4':
+        return 'bg-cyan-50 text-cyan-800 border-cyan-200';
+      default:
+        return 'bg-slate-100 text-slate-800 border-slate-200';
+    }
+  };
+
   return (
     <div className="space-y-6">
-      {/* Sub-tab Navigation */}
-      <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-xl text-sm font-normal">
+      {/* ------------------------------------------------------------- */}
+      {/* SUB-TAB NAVIGATION & ACTION TOOLBAR */}
+      {/* ------------------------------------------------------------- */}
+      <div className="bg-white p-2.5 rounded-2xl border border-slate-200/80 shadow-2xs flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+        {/* Sub-tab pills */}
+        <div className="flex items-center bg-slate-100/80 p-1.5 rounded-xl border border-slate-200/60 overflow-x-auto custom-scrollbar">
           <button
             type="button"
             onClick={() => setActiveSubTab('suppliers')}
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg transition-all cursor-pointer ${
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg transition-all text-xs font-medium whitespace-nowrap cursor-pointer ${
               activeSubTab === 'suppliers'
-                ? 'bg-white text-emerald-800 shadow-xs font-normal'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-white text-emerald-800 shadow-2xs font-semibold'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
             }`}
           >
-            <Building2 className="w-4 h-4 text-emerald-600" />
-            🏬 ข้อมูล Supplier ({(suppliers || []).length})
+            <span className="text-sm">🏬</span>
+            <span>ข้อมูล Supplier</span>
+            <span className={`px-2 py-0.5 text-xs rounded-full font-mono ${activeSubTab === 'suppliers' ? 'bg-emerald-100 text-emerald-800 font-semibold' : 'bg-slate-200 text-slate-700'}`}>
+              {suppliers.length}
+            </span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveSubTab('rms')}
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg transition-all cursor-pointer ${
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg transition-all text-xs font-medium whitespace-nowrap cursor-pointer ${
               activeSubTab === 'rms'
-                ? 'bg-white text-sky-800 shadow-xs font-normal'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-white text-sky-800 shadow-2xs font-semibold'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
             }`}
           >
-            <Layers className="w-4 h-4 text-sky-600" />
-            🥬 ข้อมูลวัตถุดิบ & ผูก Supplier ({(rmItems || []).length})
+            <span className="text-sm">🥬</span>
+            <span>ทะเบียนวัตถุดิบ & ผูก Supplier</span>
+            <span className={`px-2 py-0.5 text-xs rounded-full font-mono ${activeSubTab === 'rms' ? 'bg-sky-100 text-sky-800 font-semibold' : 'bg-slate-200 text-slate-700'}`}>
+              {rmItems.length}
+            </span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveSubTab('matrix')}
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg transition-all cursor-pointer ${
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg transition-all text-xs font-medium whitespace-nowrap cursor-pointer ${
               activeSubTab === 'matrix'
-                ? 'bg-white text-purple-800 shadow-xs font-normal'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-white text-purple-800 shadow-2xs font-semibold'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
             }`}
           >
-            <Sliders className="w-4 h-4 text-purple-600" />
-            📐 ตารางเกณฑ์การสุ่มตรวจ Matrix (SD-PC-03 R01)
+            <span className="text-sm">📐</span>
+            <span>ตารางเกณฑ์ QC Matrix</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('defectCats')}
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg transition-all text-xs font-medium whitespace-nowrap cursor-pointer ${
+              activeSubTab === 'defectCats'
+                ? 'bg-white text-rose-800 shadow-2xs font-semibold'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+            }`}
+          >
+            <span className="text-sm">🏷️</span>
+            <span>หมวดหมู่ปัญหา QC</span>
+            <span className={`px-2 py-0.5 text-xs rounded-full font-mono ${activeSubTab === 'defectCats' ? 'bg-rose-100 text-rose-800 font-semibold' : 'bg-slate-200 text-slate-700'}`}>
+              {defectCategories.length}
+            </span>
           </button>
         </div>
 
-        {/* Search & Action Bar */}
+        {/* Search & Main Action Button */}
         <div className="flex items-center gap-3">
           {activeSubTab !== 'matrix' && (
-            <div className="relative">
+            <div className="relative flex-1 sm:w-64">
               <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="ค้นหาข้อมูล..."
-                className="h-9 pl-9 pr-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-normal text-slate-800 focus:bg-white focus:outline-none focus:border-emerald-500"
+                placeholder={
+                  activeSubTab === 'suppliers'
+                    ? 'ค้นหาชื่อ, รหัส, เบอร์โทร...'
+                    : activeSubTab === 'rms'
+                    ? 'ค้นชื่อ RM, รหัส, หมวดหมู่...'
+                    : 'ค้นหมวดหมู่ปัญหา...'
+                }
+                className="w-full h-9.5 pl-9 pr-8 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all placeholder:text-slate-400"
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
           )}
 
@@ -478,10 +640,10 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
             <button
               type="button"
               onClick={handleOpenAddSupplier}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-normal text-sm rounded-xl shadow-xs transition-all cursor-pointer"
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-medium text-sm rounded-xl shadow-xs hover:shadow-sm transition-all cursor-pointer whitespace-nowrap"
             >
-              <Plus className="w-4 h-4" />
-              เพิ่ม Supplier ใหม่
+              <span className="text-xs">➕</span>
+              <span>เพิ่ม Supplier ใหม่</span>
             </button>
           )}
 
@@ -489,78 +651,144 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
             <button
               type="button"
               onClick={handleOpenAddRm}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white font-normal text-sm rounded-xl shadow-xs transition-all cursor-pointer"
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-sky-600 hover:bg-sky-700 active:scale-95 text-white font-medium text-sm rounded-xl shadow-xs hover:shadow-sm transition-all cursor-pointer whitespace-nowrap"
             >
-              <Plus className="w-4 h-4" />
-              เพิ่มวัตถุดิบ (RM) ใหม่
+              <span className="text-xs">➕</span>
+              <span>เพิ่มวัตถุดิบ (RM) ใหม่</span>
+            </button>
+          )}
+
+          {activeSubTab === 'defectCats' && (
+            <button
+              type="button"
+              onClick={handleOpenAddCat}
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-medium text-sm rounded-xl shadow-xs hover:shadow-sm transition-all cursor-pointer whitespace-nowrap"
+            >
+              <span className="text-xs">➕</span>
+              <span>เพิ่มหมวดหมู่ปัญหา</span>
             </button>
           )}
         </div>
       </div>
 
+      {/* ------------------------------------------------------------- */}
       {/* 1. SUPPLIERS DIRECTORY SUB-TAB */}
+      {/* ------------------------------------------------------------- */}
       {activeSubTab === 'suppliers' && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-          <div className="p-5 border-b border-slate-200 flex items-center justify-between">
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+          <div className="p-5 border-b border-slate-200/80 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h3 className="text-lg font-normal text-slate-900 flex items-center gap-2">
-                <Building2 className="w-5 h-5 text-emerald-600" />
+              <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-emerald-600" />
                 รายชื่อผู้ส่งมอบวัตถุดิบ (Registered Suppliers)
               </h3>
-              <p className="text-sm text-slate-500 mt-0.5">
-                จัดการรหัส ชื่อผู้ส่งมอบ/ฟาร์ม ชื่อผู้ติดต่อ และเบอร์โทรศัพท์
+              <p className="text-xs text-slate-500 mt-0.5">
+                ตารางแสดงข้อมูลผู้ส่งมอบ/ฟาร์ม รายชื่อผู้ติดต่อ เบอร์โทรศัพท์ และสถานที่จัดส่ง
               </p>
+            </div>
+            <div className="text-xs font-mono text-slate-500 bg-white px-3 py-1.5 rounded-lg border border-slate-200">
+              แสดงข้อมูล {filteredSuppliers.length} / {suppliers.length} ราย
             </div>
           </div>
 
-          <div className="overflow-x-auto max-h-[480px] overflow-y-auto custom-scrollbar">
+          <div className="overflow-x-auto max-h-[500px] overflow-y-auto custom-scrollbar">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-sm font-normal uppercase tracking-wider text-slate-500 sticky top-0 z-10 shadow-2xs">
-                  <th className="py-3.5 px-4">รหัส Supplier</th>
+                <tr className="bg-slate-50/90 backdrop-blur-xs border-b border-slate-200 text-xs font-semibold uppercase tracking-wider text-slate-500 sticky top-0 z-10">
+                  <th className="py-3.5 px-4 w-28">รหัส Supplier</th>
                   <th className="py-3.5 px-4">ชื่อผู้ส่งมอบ / ฟาร์ม</th>
                   <th className="py-3.5 px-4">ผู้ติดต่อ</th>
                   <th className="py-3.5 px-4">เบอร์โทรศัพท์</th>
                   <th className="py-3.5 px-4">อีเมล</th>
-                  <th className="py-3.5 px-4">ที่อยู่</th>
-                  <th className="py-3.5 px-4 text-center">จัดการ</th>
+                  <th className="py-3.5 px-4">ที่อยู่จัดส่ง</th>
+                  <th className="py-3.5 px-4 text-center w-24">จัดการ</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200 text-sm font-normal text-slate-800">
+              <tbody className="divide-y divide-slate-200/80 text-sm font-normal text-slate-800">
                 {filteredSuppliers.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-10 text-center text-slate-400">
-                      ไม่พบข้อมูล Supplier ในระบบ
+                    <td colSpan={7} className="py-12 text-center">
+                      <div className="flex flex-col items-center justify-center max-w-sm mx-auto">
+                        <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 mb-3">
+                          <Building2 className="w-6 h-6" />
+                        </div>
+                        <h4 className="text-sm font-medium text-slate-800">ไม่พบข้อมูล Supplier</h4>
+                        <p className="text-xs text-slate-500 mt-1 mb-4 text-center">
+                          {searchQuery ? `ไม่พบข้อมูลที่ตรงกับคำค้นหา "${searchQuery}"` : 'ยังไม่มีผู้ส่งมอบในระบบ กดปุ่มด้านล่างเพื่อเพิ่มข้อมูลรายแรก'}
+                        </p>
+                        {!searchQuery && (
+                          <button
+                            type="button"
+                            onClick={handleOpenAddSupplier}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs rounded-xl shadow-xs transition-all cursor-pointer"
+                          >
+                            <Plus className="w-4 h-4" />
+                            เพิ่ม Supplier รายแรก
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ) : (
                   paginatedSuppliers.map((sup: Supplier) => (
-                    <tr key={sup.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3.5 px-4 font-mono font-normal text-emerald-700">
-                        {sup.code}
+                    <tr key={sup.id} className="hover:bg-slate-50/80 transition-colors group">
+                      <td className="py-3.5 px-4">
+                        <span className="font-mono text-xs font-semibold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200/80 inline-block">
+                          {sup.code}
+                        </span>
                       </td>
-                      <td className="py-3.5 px-4 font-normal text-slate-900">
+                      <td className="py-3.5 px-4 font-medium text-slate-900">
                         {sup.name}
                       </td>
                       <td className="py-3.5 px-4 text-slate-600">
-                        {sup.contactPerson || '-'}
+                        {sup.contactPerson ? (
+                          <div className="flex items-center gap-1.5">
+                            <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span>{sup.contactPerson}</span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 italic text-xs">-</span>
+                        )}
                       </td>
-                      <td className="py-3.5 px-4 font-mono text-slate-600">
-                        {formatPhoneNumber(sup.phone)}
+                      <td className="py-3.5 px-4">
+                        {sup.phone ? (
+                          <div className="flex items-center gap-1.5 font-mono text-slate-700 text-xs">
+                            <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span>{formatPhoneNumber(sup.phone)}</span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 italic text-xs">-</span>
+                        )}
                       </td>
-                      <td className="py-3.5 px-4 text-slate-600">
-                        {sup.email || '-'}
+                      <td className="py-3.5 px-4">
+                        {sup.email ? (
+                          <div className="flex items-center gap-1.5 text-slate-600 text-xs">
+                            <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span className="truncate max-w-[140px]" title={sup.email}>{sup.email}</span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 italic text-xs">-</span>
+                        )}
                       </td>
-                      <td className="py-3.5 px-4 text-slate-600 truncate max-w-[150px]" title={sup.address}>
-                        {sup.address || '-'}
+                      <td className="py-3.5 px-4 text-slate-600 text-xs">
+                        {sup.address ? (
+                          <div className="flex items-center gap-1.5">
+                            <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span className="truncate max-w-[180px]" title={sup.address}>
+                              {sup.address}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400 italic text-xs">-</span>
+                        )}
                       </td>
                       <td className="py-3.5 px-4 text-center">
-                        <div className="flex items-center justify-center gap-2">
+                        <div className="flex items-center justify-center gap-1.5">
                           <button
                             type="button"
                             onClick={() => handleOpenEditSupplier(sup)}
-                            className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors cursor-pointer"
-                            title="แก้ไข"
+                            className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors cursor-pointer active:scale-95"
+                            title="แก้ไขข้อมูล Supplier"
                           >
                             <Edit2 className="w-3.5 h-3.5" />
                           </button>
@@ -571,8 +799,8 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
                                 onDeleteSupplier(sup.id);
                               }
                             }}
-                            className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition-colors cursor-pointer"
-                            title="ลบ"
+                            className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition-colors cursor-pointer active:scale-95"
+                            title="ลบ Supplier"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -587,7 +815,7 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
 
           <TablePagination
             currentPage={supPage}
-            totalPages={Math.ceil(filteredSuppliers.length / supPageSize)}
+            totalPages={Math.ceil(filteredSuppliers.length / supPageSize) || 1}
             totalItems={filteredSuppliers.length}
             pageSize={supPageSize}
             onPageChange={setSupPage}
@@ -597,90 +825,121 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
         </div>
       )}
 
+      {/* ------------------------------------------------------------- */}
       {/* 2. RAW MATERIALS (RM) & SUPPLIER LINKING SUB-TAB */}
+      {/* ------------------------------------------------------------- */}
       {activeSubTab === 'rms' && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-          <div className="p-5 border-b border-slate-200 flex items-center justify-between">
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+          <div className="p-5 border-b border-slate-200/80 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h3 className="text-lg font-normal text-slate-900 flex items-center gap-2">
-                <Layers className="w-5 h-5 text-sky-600" />
+              <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+                <Layers className="w-4 h-4 text-sky-600" />
                 ทะเบียนวัตถุดิบและการผูก Supplier (Raw Materials Directory)
               </h3>
-              <p className="text-sm text-slate-500 mt-0.5">
-                สามารถเชื่อมโยง 1 วัตถุดิบ กับ Supplier ได้หลายราย (Multi-Supplier Linking)
+              <p className="text-xs text-slate-500 mt-0.5">
+                ตารางวัตถุดิบ พร้อมการเชื่อมโยงผู้ส่งมอบที่จัดหาได้ (Multi-Supplier Linking)
               </p>
+            </div>
+            <div className="text-xs font-mono text-slate-500 bg-white px-3 py-1.5 rounded-lg border border-slate-200">
+              แสดงวัตถุดิบ {filteredRms.length} / {rmItems.length} รายการ
             </div>
           </div>
 
-          <div className="overflow-x-auto max-h-[480px] overflow-y-auto custom-scrollbar">
+          <div className="overflow-x-auto max-h-[500px] overflow-y-auto custom-scrollbar">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-sm font-normal uppercase tracking-wider text-slate-500 sticky top-0 z-10 shadow-2xs">
-                  <th className="py-3.5 px-4">รหัส RM</th>
+                <tr className="bg-slate-50/90 backdrop-blur-xs border-b border-slate-200 text-xs font-semibold uppercase tracking-wider text-slate-500 sticky top-0 z-10">
+                  <th className="py-3.5 px-4 w-28">รหัส RM</th>
                   <th className="py-3.5 px-4">ชื่อวัตถุดิบ (Raw Material)</th>
                   <th className="py-3.5 px-4">หมวดหมู่สเปก QC (Category)</th>
-                  <th className="py-3.5 px-4">หน่วยนับ</th>
+                  <th className="py-3.5 px-4 w-24">หน่วยนับ</th>
                   <th className="py-3.5 px-4">Supplier ที่จัดหาได้ (Linked Suppliers)</th>
-                  <th className="py-3.5 px-4 text-center">จัดการ</th>
+                  <th className="py-3.5 px-4 text-center w-24">จัดการ</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200 text-sm font-normal text-slate-800">
+              <tbody className="divide-y divide-slate-200/80 text-sm font-normal text-slate-800">
                 {filteredRms.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-10 text-center text-slate-400">
-                      ไม่พบข้อมูลวัตถุดิบในระบบ
+                    <td colSpan={6} className="py-12 text-center">
+                      <div className="flex flex-col items-center justify-center max-w-sm mx-auto">
+                        <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400 mb-3">
+                          <Layers className="w-6 h-6" />
+                        </div>
+                        <h4 className="text-sm font-medium text-slate-800">ไม่พบข้อมูลวัตถุดิบ</h4>
+                        <p className="text-xs text-slate-500 mt-1 mb-4 text-center">
+                          {searchQuery ? `ไม่พบข้อมูลที่ตรงกับคำค้นหา "${searchQuery}"` : 'ยังไม่มีวัตถุดิบในระบบ กดปุ่มด้านล่างเพื่อเพิ่มวัตถุดิบรายการแรก'}
+                        </p>
+                        {!searchQuery && (
+                          <button
+                            type="button"
+                            onClick={handleOpenAddRm}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white font-medium text-xs rounded-xl shadow-xs transition-all cursor-pointer"
+                          >
+                            <Plus className="w-4 h-4" />
+                            เพิ่มวัตถุดิบรายแรก
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ) : (
                   paginatedRms.map((rm: RMItem) => {
-                    const linkedSupIds = rm.supplierIds && rm.supplierIds.length > 0
-                      ? rm.supplierIds
-                      : [rm.supplierId];
+                    const linkedSupIds =
+                      rm.supplierIds && rm.supplierIds.length > 0
+                        ? rm.supplierIds
+                        : rm.supplierId
+                        ? [rm.supplierId]
+                        : [];
 
                     const linkedSups = (suppliers || []).filter((s) => s && s.id && linkedSupIds.includes(s.id));
 
                     return (
-                      <tr key={rm.id} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="py-3.5 px-4 font-mono font-normal text-sky-700">
-                          {rm.code}
+                      <tr key={rm.id} className="hover:bg-slate-50/80 transition-colors group">
+                        <td className="py-3.5 px-4">
+                          <span className="font-mono text-xs font-semibold text-sky-800 bg-sky-50 px-2.5 py-1 rounded-md border border-sky-200/80 inline-block">
+                            {rm.code}
+                          </span>
                         </td>
-                        <td className="py-3.5 px-4 font-normal text-slate-900">
+                        <td className="py-3.5 px-4 font-medium text-slate-900">
                           {rm.name}
                         </td>
                         <td className="py-3.5 px-4">
-                          <span className="inline-block px-2.5 py-1 rounded-md text-sm font-normal bg-slate-100 text-slate-800 border border-slate-200">
+                          <span className={`inline-block px-2.5 py-1 rounded-md text-xs font-medium border ${getCategoryBadgeClass(rm.category)}`}>
                             {rm.categoryLabel || rm.category}
                           </span>
                         </td>
-                        <td className="py-3.5 px-4 font-normal text-slate-600">
-                          {rm.unit}
+                        <td className="py-3.5 px-4">
+                          <span className="inline-block px-2 py-0.5 rounded-md text-xs font-mono font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                            {rm.unit}
+                          </span>
                         </td>
                         <td className="py-3.5 px-4">
-                          <div className="flex flex-wrap gap-1.5">
+                          <div className="flex flex-wrap items-center gap-1.5">
                             {linkedSups.length === 0 ? (
-                              <span className="text-sm text-slate-400 italic">
-                                ยังไม่ได้ผูก Supplier
+                              <span className="text-xs text-amber-600 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200 font-medium">
+                                ⚠️ ยังไม่ได้ผูก Supplier
                               </span>
                             ) : (
                               linkedSups.map((s) => (
                                 <span
                                   key={s.id}
-                                  className="inline-flex items-center gap-1 text-sm font-normal px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200"
+                                  className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full bg-slate-50 text-slate-800 border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-900 transition-colors"
                                 >
                                   <Building2 className="w-3 h-3 text-emerald-600" />
-                                  {s.name}
+                                  <span>{s.name}</span>
+                                  <span className="font-mono text-[10px] text-slate-400">({s.code})</span>
                                 </span>
                               ))
                             )}
                           </div>
                         </td>
                         <td className="py-3.5 px-4 text-center">
-                          <div className="flex items-center justify-center gap-2">
+                          <div className="flex items-center justify-center gap-1.5">
                             <button
                               type="button"
                               onClick={() => handleOpenEditRm(rm)}
-                              className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors cursor-pointer"
-                              title="แก้ไข"
+                              className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors cursor-pointer active:scale-95"
+                              title="แก้ไขข้อมูลวัตถุดิบ"
                             >
                               <Edit2 className="w-3.5 h-3.5" />
                             </button>
@@ -691,8 +950,8 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
                                   onDeleteRMItem(rm.id);
                                 }
                               }}
-                              className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition-colors cursor-pointer"
-                              title="ลบ"
+                              className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition-colors cursor-pointer active:scale-95"
+                              title="ลบวัตถุดิบ"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -708,7 +967,7 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
 
           <TablePagination
             currentPage={rmPage}
-            totalPages={Math.ceil(filteredRms.length / rmPageSize)}
+            totalPages={Math.ceil(filteredRms.length / rmPageSize) || 1}
             totalItems={filteredRms.length}
             pageSize={rmPageSize}
             onPageChange={setRmPage}
@@ -718,131 +977,186 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
         </div>
       )}
 
+      {/* ------------------------------------------------------------- */}
       {/* 3. QC SAMPLING MATRIX RULES MANAGEMENT SUB-TAB */}
+      {/* ------------------------------------------------------------- */}
       {activeSubTab === 'matrix' && (
-        <div className="space-y-6">
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-purple-100 text-purple-700">
-                <Sliders className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-lg font-normal text-slate-900">
-                  เกณฑ์การสุ่มตรวจวัตถุดิบตามประเภท (QC Sampling Matrix SD-PC-03 R01)
-                </h3>
-                <p className="text-sm text-slate-500">
-                  แก้ไข ปรับเพิ่ม/ลด ช่วงน้ำหนัก ปริมาณสุ่มตรวจ และเกณฑ์ของเสียยินยอมสูงสุด
-                </p>
-              </div>
-            </div>
+        <div className="space-y-5">
+          {/* Dedicated Category Selector Cards Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {Object.entries(dynamicCategories).map(([catKey, catLabel]) => {
+              const isSelected = selectedMatrixCategory === catKey;
+              const meta = categoryMeta[catKey] || {
+                icon: '📦',
+                shortTitle: `${catKey}`,
+                subtext: catLabel,
+                themeColor: 'purple',
+              };
+              const ruleCount = (defectMatrix[catKey] || []).length;
 
-            <div className="flex items-center gap-3">
-              {/* Category Pills (Dynamic) */}
-              <div className="inline-flex bg-slate-100 p-1 rounded-xl border border-slate-200 text-sm font-normal flex-wrap">
-                {Object.entries(dynamicCategories).map(([key, label]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setSelectedMatrixCategory(key)}
-                    className={`px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
-                      selectedMatrixCategory === key
-                        ? 'bg-amber-500 text-white shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+              return (
+                <button
+                  key={catKey}
+                  type="button"
+                  onClick={() => setSelectedMatrixCategory(catKey)}
+                  className={`text-left p-4 rounded-2xl transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between border ${
+                    isSelected
+                      ? 'bg-white border-2 border-purple-600 shadow-md shadow-purple-600/10 ring-4 ring-purple-500/10 text-purple-950'
+                      : 'bg-white/80 hover:bg-white border-slate-200/90 shadow-2xs hover:shadow-xs hover:border-slate-300 text-slate-700'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl">{meta.icon}</span>
+                      <div>
+                        <h4 className={`text-sm font-semibold leading-tight ${isSelected ? 'text-purple-950 font-bold' : 'text-slate-900'}`}>
+                          {meta.shortTitle}
+                        </h4>
+                        <span className="text-[11px] font-mono text-slate-500 mt-0.5 block">
+                          Category: {catKey}
+                        </span>
+                      </div>
+                    </div>
+                    {isSelected && (
+                      <span className="w-5 h-5 rounded-full bg-purple-600 text-white flex items-center justify-center text-xs shrink-0 shadow-2xs">
+                        ✓
+                      </span>
+                    )}
+                  </div>
 
-              {/* Add New Rule Button */}
-              <button
-                type="button"
-                onClick={handleOpenAddRule}
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-normal text-sm rounded-xl shadow-xs transition-all cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                เพิ่มช่วงน้ำหนักสุ่มตรวจใหม่
-              </button>
-            </div>
+                  <p className="text-xs text-slate-500 line-clamp-1 mb-3">
+                    {meta.subtext}
+                  </p>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                    <span className="text-slate-500 font-medium">เกณฑ์สุ่มตรวจ</span>
+                    <span className={`px-2 py-0.5 rounded-full font-mono font-medium text-xs ${
+                      isSelected ? 'bg-purple-100 text-purple-800 font-semibold' : 'bg-slate-100 text-slate-700'
+                    }`}>
+                      {ruleCount} กฎ
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
           </div>
 
-          {/* Matrix Rules Table */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-            <div className="p-5 border-b border-slate-200 flex items-center justify-between">
-              <h4 className="text-base font-normal text-slate-900 flex items-center gap-2">
-                ตารางเกณฑ์ปัจจุบันสำหรับหมวดหมู่:{' '}
-                <span className="text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded-md border border-purple-200 font-normal">
-                  {selectedMatrixCategory === 'Type 1'
-                    ? 'Type 1 (เกษตรทั่วไป เช่น ข่า, มะพร้าว)'
-                    : selectedMatrixCategory === 'Type 2'
-                    ? 'Type 2 (ผักใบ/สมุนไพรสด เช่น ใบตอง, ใบมะกรูด)'
-                    : 'Type 4 (ประมง เช่น ปลาทู, กุ้ง)'}
+          {/* QC Sampling Rules Table */}
+          <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+            <div className="p-4 sm:px-5 sm:py-4 border-b border-slate-100 bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 bg-purple-50 text-purple-600 rounded-lg">
+                  <Sliders className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-semibold text-slate-900">
+                      ตารางเกณฑ์สุ่มตรวจ
+                    </h4>
+                    <span className="text-[11px] font-medium text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md border border-purple-200">
+                      {selectedMatrixCategory}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {dynamicCategories[selectedMatrixCategory] || selectedMatrixCategory}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] font-medium text-slate-400 bg-slate-50 px-2.5 py-1 rounded-full border border-slate-100 hidden sm:inline-block">
+                  {currentRulesList.length} รายการ
                 </span>
-              </h4>
+                <button
+                  type="button"
+                  onClick={handleOpenAddRule}
+                  className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white font-medium text-xs rounded-xl shadow-xs transition-all cursor-pointer whitespace-nowrap"
+                >
+                  <Plus className="w-4 h-4 stroke-[2.5]" />
+                  <span>เพิ่มเกณฑ์สุ่มตรวจ</span>
+                </button>
+              </div>
             </div>
 
-            <div className="overflow-x-auto max-h-[480px] overflow-y-auto custom-scrollbar">
+            <div className="overflow-x-auto max-h-[500px] overflow-y-auto custom-scrollbar">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-sm font-normal uppercase tracking-wider text-slate-500 sticky top-0 z-10 shadow-2xs">
-                    <th className="py-3.5 px-4">ลำดับ</th>
-                    <th className="py-3.5 px-4">ช่วงน้ำหนักรับเข้า (Receive Qty Range)</th>
-                    <th className="py-3.5 px-4 text-right">ปริมาณสุ่มตรวจ (Sample Qty)</th>
-                    <th className="py-3.5 px-4 text-right">ของเสียยินยอมสูงสุด (Max Accept Defect)</th>
-                    <th className="py-3.5 px-4 text-right">% Defect ยินยอมสูงสุด</th>
-                    <th className="py-3.5 px-4 text-center font-normal">ผลการประเมินอัตโนมัติ</th>
-                    <th className="py-3.5 px-4 text-center">จัดการ</th>
+                  <tr className="bg-white border-b border-slate-100 text-[11px] font-semibold uppercase tracking-wider text-slate-400 sticky top-0 z-10">
+                    <th className="py-3 px-4 w-12 text-center">#</th>
+                    <th className="py-3 px-4">รับเข้า (Receive Qty)</th>
+                    <th className="py-3 px-4 text-right">สุ่มตรวจ (Sample)</th>
+                    <th className="py-3 px-4 text-right">ยอมรับได้ (Max Defect)</th>
+                    <th className="py-3 px-4 text-right">สัดส่วน (%)</th>
+                    <th className="py-3 px-4 w-20 text-center">จัดการ</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-200 text-sm font-normal text-slate-800">
+                <tbody className="divide-y divide-slate-100/80 text-sm text-slate-700">
                   {currentRulesList.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-10 text-center text-slate-400">
-                        ยังไม่มีการกำหนดเกณฑ์สุ่มตรวจสำหรับหมวดหมู่นี้
+                      <td colSpan={6} className="py-16 text-center">
+                        <div className="flex flex-col items-center justify-center max-w-sm mx-auto">
+                          <div className="w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center text-slate-300 mb-3 border border-slate-100 shadow-sm">
+                            <Sliders className="w-5 h-5" />
+                          </div>
+                          <h4 className="text-sm font-medium text-slate-700">ไม่มีข้อมูลเกณฑ์สุ่มตรวจ</h4>
+                          <p className="text-xs text-slate-400 mt-1 mb-5 text-center px-4">
+                            เพิ่มเกณฑ์กำหนดปริมาณสุ่มตรวจและจุดวิกฤตของเสีย (Max Defect)
+                          </p>
+                          <button
+                            type="button"
+                            onClick={handleOpenAddRule}
+                            className="inline-flex items-center gap-1.5 px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 font-medium text-xs rounded-xl shadow-xs border border-slate-200 transition-all cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5 text-purple-600" />
+                            เพิ่มเกณฑ์แรก
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ) : (
                     paginatedRules.map((rule, idx) => {
                       const actualIdx = (rulePage - 1) * rulePageSize + idx;
                       return (
-                        <tr key={actualIdx} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="py-3.5 px-4 font-normal text-slate-500">
-                            #{actualIdx + 1}
+                        <tr key={actualIdx} className="hover:bg-slate-50/50 transition-colors group">
+                          <td className="py-3 px-4 text-center font-mono text-[11px] text-slate-400">
+                            {actualIdx + 1}
                           </td>
-                          <td className="py-3.5 px-4 font-mono font-normal text-slate-900">
-                            {rule.minQty.toLocaleString()} kg — {rule.maxQty.toLocaleString()} kg
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-medium text-slate-800">{rule.minQty.toLocaleString()}</span>
+                              <span className="text-slate-300">-</span>
+                              <span className="font-mono font-medium text-slate-800">{rule.maxQty.toLocaleString()}</span>
+                              <span className="text-xs text-slate-400">kg</span>
+                            </div>
                           </td>
-                          <td className="py-3.5 px-4 text-right font-normal text-sky-700">
-                            {rule.sampleQty.toLocaleString()} kg
+                          <td className="py-3 px-4 text-right">
+                            <span className="font-mono font-semibold text-slate-900">{rule.sampleQty.toLocaleString()}</span>
+                            <span className="text-[11px] text-slate-400 ml-1">kg</span>
                           </td>
-                          <td className="py-3.5 px-4 text-right font-normal text-rose-700">
-                            {rule.acceptMaxDefectQty.toLocaleString()} kg
+                          <td className="py-3 px-4 text-right">
+                            <span className="font-mono font-semibold text-rose-600">{rule.acceptMaxDefectQty.toLocaleString()}</span>
+                            <span className="text-[11px] text-rose-300 ml-1">kg</span>
                           </td>
-                          <td className="py-3.5 px-4 text-right font-normal text-slate-800">
-                            {rule.acceptMaxDefectPercent}%
-                          </td>
-                          <td className="py-3.5 px-4 text-center">
-                            <span className="inline-flex items-center gap-1 text-sm font-normal px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                              ของเสีย ≤ {rule.acceptMaxDefectQty} kg = PASS
+                          <td className="py-3 px-4 text-right">
+                            <span className="inline-flex items-center justify-center min-w-[3rem] px-1.5 py-0.5 rounded-md bg-slate-50 text-slate-500 font-mono text-[11px] border border-slate-100">
+                              {rule.acceptMaxDefectPercent}%
                             </span>
                           </td>
-                          <td className="py-3.5 px-4 text-center">
-                            <div className="flex items-center justify-center gap-2">
+                          <td className="py-3 px-4 text-center">
+                            <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                               <button
                                 type="button"
                                 onClick={() => handleOpenEditRule(rule, actualIdx)}
-                                className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors cursor-pointer"
-                                title="แก้ไขเกณฑ์"
+                                className="p-1.5 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition-colors cursor-pointer"
+                                title="แก้ไข"
                               >
                                 <Edit2 className="w-3.5 h-3.5" />
                               </button>
                               <button
                                 type="button"
                                 onClick={() => handleDeleteRule(actualIdx)}
-                                className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition-colors cursor-pointer"
-                                title="ลบเกณฑ์"
+                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                title="ลบ"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -858,7 +1172,7 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
 
             <TablePagination
               currentPage={rulePage}
-              totalPages={Math.ceil(currentRulesList.length / rulePageSize)}
+              totalPages={Math.ceil(currentRulesList.length / rulePageSize) || 1}
               totalItems={currentRulesList.length}
               pageSize={rulePageSize}
               onPageChange={setRulePage}
@@ -870,69 +1184,310 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
       )}
 
       {/* ------------------------------------------------------------- */}
-      {/* MODAL 1: ADD/EDIT SUPPLIER */}
+      {/* 4. DEFECT CATEGORIES SUB-TAB */}
       {/* ------------------------------------------------------------- */}
-      {isSupplierModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/70 backdrop-blur-md animate-fade-in overflow-y-auto">
-          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.3)] border border-slate-200/80 w-full max-w-md max-h-[calc(100vh-2rem)] sm:max-h-[90vh] flex flex-col my-auto overflow-hidden transform transition-all relative">
-            <div className="flex-none bg-gradient-to-r from-slate-950 via-emerald-950 to-slate-900 px-5 py-4 sm:px-7 sm:py-5 text-white flex items-center justify-between rounded-t-2xl sm:rounded-t-3xl border-b border-emerald-900/40">
-              <h3 className="text-base sm:text-lg font-normal text-white flex items-center gap-2.5">
-                <Building2 className="w-5 h-5 text-emerald-400" />
-                {editingSupplier ? 'แก้ไขข้อมูล Supplier' : 'เพิ่ม Supplier ใหม่'}
+      {activeSubTab === 'defectCats' && (
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+          <div className="p-5 border-b border-slate-200/80 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+                <Tag className="w-4 h-4 text-rose-600" />
+                หมวดหมู่ปัญหาคุณภาพ (QC Defect Categories Master Data)
               </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                กำหนดและจัดการหมวดหมู่ปัญหาคุณภาพ (ผูกกับ Google Sheet: DB_DefectCategories) เพื่อใช้ใน Dropdown เมนู QC Issue Log
+              </p>
+            </div>
+            <div className="text-xs font-mono text-slate-500 bg-white px-3 py-1.5 rounded-lg border border-slate-200">
+              รวมทั้งหมด {filteredDefectCats.length} หมวดหมู่
+            </div>
+          </div>
+
+          <div className="overflow-x-auto max-h-[500px] overflow-y-auto custom-scrollbar">
+            <table className="w-full text-left border-collapse">
+              <thead className="sticky top-0 bg-slate-100/90 backdrop-blur-xs text-slate-700 text-xs font-semibold uppercase tracking-wider z-10 border-b border-slate-200">
+                <tr>
+                  <th className="py-3 px-4 w-12 text-center">#</th>
+                  <th className="py-3 px-4 w-28">รหัส</th>
+                  <th className="py-3 px-4">ชื่อหมวดหมู่ปัญหา</th>
+                  <th className="py-3 px-4">คำอธิบายรายละเอียด</th>
+                  <th className="py-3 px-4 w-36 text-center">สถานะ</th>
+                  <th className="py-3 px-4 w-24 text-center">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-sm">
+                {filteredDefectCats.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-12 text-center text-slate-400 font-medium">
+                      ไม่พบข้อมูลหมวดหมู่ปัญหา
+                    </td>
+                  </tr>
+                ) : (
+                  filteredDefectCats.map((cat, idx) => (
+                    <tr key={cat.id || idx} className="hover:bg-slate-50/80 transition-colors group">
+                      <td className="py-3.5 px-4 text-center text-xs text-slate-400 font-mono">
+                        {idx + 1}
+                      </td>
+                      <td className="py-3.5 px-4 font-mono text-xs font-semibold text-rose-700">
+                        {cat.id}
+                      </td>
+                      <td className="py-3.5 px-4 font-semibold text-slate-900">
+                        {cat.name}
+                      </td>
+                      <td className="py-3.5 px-4 text-xs text-slate-600">
+                        {cat.description || '-'}
+                      </td>
+                      <td className="py-3.5 px-3 text-center whitespace-nowrap min-w-[130px]">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleCatActive(cat)}
+                          className={`inline-flex items-center justify-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border shadow-2xs transition-all cursor-pointer select-none whitespace-nowrap shrink-0 active:scale-95 ${
+                            cat.isActive !== false
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200/80 hover:bg-emerald-100 hover:border-emerald-300'
+                              : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200 hover:text-slate-700'
+                          }`}
+                          title="คลิกเพื่อสลับสถานะ เปิด/ปิดใช้งาน"
+                        >
+                          <span className="relative flex h-2 w-2 shrink-0">
+                            {cat.isActive !== false && (
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                            )}
+                            <span className={`relative inline-flex rounded-full h-2 w-2 ${cat.isActive !== false ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                          </span>
+                          <span className="whitespace-nowrap font-medium">{cat.isActive !== false ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}</span>
+                        </button>
+                      </td>
+                      <td className="py-3.5 px-4 text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditCat(cat)}
+                            className="p-1.5 text-slate-400 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition-colors cursor-pointer"
+                            title="แก้ไข"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          {onDeleteDefectCategory && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (confirm(`คุณต้องการลบหมวดหมู่ปัญหา "${cat.name}" หรือไม่?`)) {
+                                  onDeleteDefectCategory(cat.id);
+                                }
+                              }}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                              title="ลบ"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* DEFECT CATEGORY MODAL */}
+      {/* ------------------------------------------------------------- */}
+      {/* MODAL 0: ADD/EDIT QC DEFECT CATEGORY */}
+      {/* ------------------------------------------------------------- */}
+      {isCatModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fade-in overflow-y-auto">
+          <div className="bg-white rounded-3xl border border-slate-200/80 shadow-2xl max-w-md w-full overflow-visible transform transition-all relative my-auto">
+            <div className="px-6 py-4.5 border-b border-slate-200/80 rounded-t-3xl flex items-center justify-between bg-gradient-to-r from-rose-50/80 via-slate-50 to-rose-50/50">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center text-lg shadow-2xs">
+                  🏷️
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    {editingCat ? 'แก้ไขหมวดหมู่ปัญหา QC' : 'เพิ่มหมวดหมู่ปัญหา QC ใหม่'}
+                  </h3>
+                  <p className="text-xs text-slate-500">จัดการประเภท defect สำหรับบันทึกประวัติ</p>
+                </div>
+              </div>
               <button
                 type="button"
-                onClick={() => setIsSupplierModalOpen(false)}
-                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+                onClick={() => setIsCatModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-slate-200/60 hover:bg-slate-200 text-slate-500 hover:text-slate-800 transition-all flex items-center justify-center cursor-pointer active:scale-95"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
-              <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-7 space-y-4 custom-scrollbar">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-normal text-slate-800 uppercase tracking-wide mb-1.5">
-                      รหัส Supplier <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={supCode}
-                      onChange={(e) => setSupCode(e.target.value)}
-                      placeholder="เช่น 05, 12, sup-01"
-                      className="w-full h-11 px-3.5 bg-white border border-slate-300 rounded-xl text-sm font-mono font-normal text-slate-900 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 shadow-2xs transition-all"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-normal text-slate-800 uppercase tracking-wide mb-1.5">
-                      ชื่อผู้ส่งมอบ / ชื่อฟาร์ม <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={supName}
-                      onChange={(e) => setSupName(e.target.value)}
-                      placeholder="ระบุชื่อ Supplier"
-                      className="w-full h-11 px-3.5 bg-white border border-slate-300 rounded-xl text-sm font-normal text-slate-900 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 shadow-2xs transition-all"
-                    />
-                  </div>
-                </div>
+            <form onSubmit={handleSaveCatSubmit} className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                  ชื่อหมวดหมู่ปัญหา <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={catName}
+                  onChange={(e) => setCatName(e.target.value)}
+                  placeholder="เช่น สิ่งแปลกปลอม (Foreign Objects)"
+                  className="w-full h-10 px-3 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
+                />
+              </div>
 
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                  คำอธิบายรายละเอียด
+                </label>
+                <textarea
+                  rows={3}
+                  value={catDesc}
+                  onChange={(e) => setCatDesc(e.target.value)}
+                  placeholder="เช่น พบเศษหิน ไม้ แมลง หรือสิ่งแปลกปลอมในวัตถุดิบ..."
+                  className="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
+                  สถานะการใช้งานระบบ (Status)
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Active Option Card */}
+                  <button
+                    type="button"
+                    onClick={() => setCatIsActive(true)}
+                    className={`p-3 rounded-xl border-2 transition-all cursor-pointer text-left flex items-center gap-2.5 active:scale-95 ${
+                      catIsActive
+                        ? 'bg-emerald-50/70 border-emerald-500 text-emerald-900 shadow-2xs ring-2 ring-emerald-500/20'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className={`p-1.5 rounded-lg ${catIsActive ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-400'}`}>
+                      <CheckCircle2 className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold">เปิดใช้งาน</div>
+                      <div className="text-[10px] opacity-75 mt-0.5">แสดงใน Dropdown</div>
+                    </div>
+                  </button>
+
+                  {/* Inactive Option Card */}
+                  <button
+                    type="button"
+                    onClick={() => setCatIsActive(false)}
+                    className={`p-3 rounded-xl border-2 transition-all cursor-pointer text-left flex items-center gap-2.5 active:scale-95 ${
+                      !catIsActive
+                        ? 'bg-rose-50/70 border-rose-500 text-rose-900 shadow-2xs ring-2 ring-rose-500/20'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className={`p-1.5 rounded-lg ${!catIsActive ? 'bg-rose-500 text-white' : 'bg-slate-200 text-slate-400'}`}>
+                      <XCircle className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold">ปิดใช้งาน</div>
+                      <div className="text-[10px] opacity-75 mt-0.5">ซ่อนจาก Dropdown</div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsCatModalOpen(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-xs rounded-xl cursor-pointer"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white font-medium text-xs rounded-xl shadow-xs transition-all cursor-pointer"
+                >
+                  บันทึกหมวดหมู่
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* MODAL 1: ADD/EDIT SUPPLIER */}
+      {/* ------------------------------------------------------------- */}
+      {isSupplierModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200/80 w-full max-w-lg overflow-visible transform transition-all relative my-auto">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-emerald-50/80 via-slate-50 to-emerald-50/50 px-6 py-4.5 border-b border-slate-200/80 rounded-t-3xl flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-lg shadow-2xs">
+                  🏬
+                </div>
                 <div>
-                  <label className="block text-sm font-normal text-slate-800 uppercase tracking-wide mb-1.5">
+                  <h3 className="text-base font-bold text-slate-900">
+                    {editingSupplier ? 'แก้ไขข้อมูล Supplier' : 'เพิ่ม Supplier ใหม่'}
+                  </h3>
+                  <p className="text-xs text-slate-500">ระบุรายละเอียดข้อมูลผู้ส่งมอบและสถานที่ติดต่อ</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSupplierModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-slate-200/60 hover:bg-slate-200 text-slate-500 hover:text-slate-800 transition-all flex items-center justify-center cursor-pointer active:scale-95"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Form Content */}
+            <form onSubmit={handleSaveSupplier} className="p-6 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                    รหัส Supplier <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={supCode}
+                    onChange={(e) => setSupCode(e.target.value)}
+                    placeholder="เช่น 05, 12, sup-01"
+                    required
+                    className="w-full h-10 px-3.5 bg-white border border-slate-300 rounded-xl text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all placeholder:text-slate-400 placeholder:font-sans"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                    ชื่อผู้ส่งมอบ / ชื่อฟาร์ม <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={supName}
+                    onChange={(e) => setSupName(e.target.value)}
+                    placeholder="ระบุชื่อ Supplier"
+                    required
+                    className="w-full h-10 px-3.5 bg-white border border-slate-300 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all placeholder:text-slate-400"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
                     ผู้ติดต่อ (Contact Person)
                   </label>
                   <input
                     type="text"
                     value={supContact}
                     onChange={(e) => setSupContact(e.target.value)}
-                    placeholder="ชื่อผู้ประสานงาน (ถ้ามี)"
-                    className="w-full h-11 px-3.5 bg-white border border-slate-300 rounded-xl text-sm font-normal text-slate-800 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 shadow-2xs transition-all"
+                    placeholder="ชื่อผู้ประสานงาน"
+                    className="w-full h-10 px-3.5 bg-white border border-slate-300 rounded-xl text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all placeholder:text-slate-400"
                   />
                 </div>
-
                 <div>
-                  <label className="block text-sm font-normal text-slate-800 uppercase tracking-wide mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
                     เบอร์โทรศัพท์
                   </label>
                   <input
@@ -940,53 +1495,54 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
                     value={supPhone}
                     onChange={(e) => setSupPhone(e.target.value)}
                     placeholder="เช่น 0812345678"
-                    className="w-full h-11 px-3.5 bg-white border border-slate-300 rounded-xl text-sm font-mono font-normal text-slate-900 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 shadow-2xs transition-all"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-normal text-slate-800 uppercase tracking-wide mb-1.5">
-                    อีเมล (Email)
-                  </label>
-                  <input
-                    type="email"
-                    value={supEmail}
-                    onChange={(e) => setSupEmail(e.target.value)}
-                    placeholder="เช่น supplier@example.com"
-                    className="w-full h-11 px-3.5 bg-white border border-slate-300 rounded-xl text-sm font-normal text-slate-900 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 shadow-2xs transition-all"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-normal text-slate-800 uppercase tracking-wide mb-1.5">
-                    ที่อยู่ (Address)
-                  </label>
-                  <textarea
-                    value={supAddress}
-                    onChange={(e) => setSupAddress(e.target.value)}
-                    placeholder="ระบุที่อยู่ของ Supplier"
-                    className="w-full min-h-[80px] p-3.5 bg-white border border-slate-300 rounded-xl text-sm font-normal text-slate-900 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 shadow-2xs transition-all custom-scrollbar"
+                    className="w-full h-10 px-3.5 bg-white border border-slate-300 rounded-xl text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all placeholder:text-slate-400 placeholder:font-sans"
                   />
                 </div>
               </div>
 
-              <div className="flex-none shrink-0 relative z-20 px-5 py-3.5 sm:px-7 sm:py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3 rounded-b-2xl sm:rounded-b-3xl">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                  อีเมล (Email)
+                </label>
+                <input
+                  type="email"
+                  value={supEmail}
+                  onChange={(e) => setSupEmail(e.target.value)}
+                  placeholder="เช่น supplier@example.com"
+                  className="w-full h-10 px-3.5 bg-white border border-slate-300 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all placeholder:text-slate-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                  ที่อยู่ (Address)
+                </label>
+                <textarea
+                  value={supAddress}
+                  onChange={(e) => setSupAddress(e.target.value)}
+                  placeholder="ระบุที่อยู่หรือฟาร์มของ Supplier..."
+                  rows={3}
+                  className="w-full p-3 bg-white border border-slate-300 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all placeholder:text-slate-400 custom-scrollbar resize-none"
+                />
+              </div>
+
+              {/* Modal Footer */}
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setIsSupplierModalOpen(false)}
-                  className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-normal text-sm rounded-xl transition-all cursor-pointer active:scale-95"
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-sm rounded-xl transition-all cursor-pointer"
                 >
                   ยกเลิก
                 </button>
                 <button
-                  type="button"
-                  onClick={handleSaveSupplier}
-                  className="px-6 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white font-normal text-sm rounded-xl shadow-lg shadow-emerald-600/25 transition-all cursor-pointer flex items-center gap-2 active:scale-95"
+                  type="submit"
+                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-sm rounded-xl shadow-sm transition-all cursor-pointer flex items-center gap-2"
                 >
                   💾 บันทึก Supplier
                 </button>
               </div>
-            </div>
+            </form>
           </div>
         </div>
       )}
@@ -995,54 +1551,65 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
       {/* MODAL 2: ADD/EDIT RAW MATERIAL & SUPPLIER LINKING */}
       {/* ------------------------------------------------------------- */}
       {isRmModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/70 backdrop-blur-md animate-fade-in overflow-y-auto">
-          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.3)] border border-slate-200/80 w-full max-w-lg max-h-[calc(100vh-2rem)] sm:max-h-[90vh] flex flex-col my-auto overflow-hidden transform transition-all relative">
-            <div className="flex-none bg-gradient-to-r from-slate-950 via-sky-950 to-slate-900 px-5 py-4 sm:px-7 sm:py-5 text-white flex items-center justify-between rounded-t-2xl sm:rounded-t-3xl border-b border-sky-900/40">
-              <h3 className="text-base sm:text-lg font-normal text-white flex items-center gap-2.5">
-                <Layers className="w-5 h-5 text-sky-400" />
-                {editingRm ? 'แก้ไขข้อมูลวัตถุดิบ & การผูก Supplier' : 'เพิ่มวัตถุดิบ (RM) ใหม่'}
-              </h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200/80 w-full max-w-lg overflow-visible transform transition-all relative my-auto">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-sky-50/80 via-slate-50 to-sky-50/50 px-6 py-4.5 border-b border-slate-200/80 rounded-t-3xl flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center text-lg shadow-2xs">
+                  📦
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    {editingRm ? 'แก้ไขข้อมูลวัตถุดิบ & การผูก Supplier' : 'เพิ่มวัตถุดิบ (RM) ใหม่'}
+                  </h3>
+                  <p className="text-xs text-slate-500">กำหนดหมวดหมู่สเปก QC หน่วยนับ และเชื่อมโยงผู้ส่งมอบ</p>
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={() => setIsRmModalOpen(false)}
-                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+                className="w-8 h-8 rounded-full bg-slate-200/60 hover:bg-slate-200 text-slate-500 hover:text-slate-800 transition-all flex items-center justify-center cursor-pointer active:scale-95"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
-              <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-7 space-y-4 custom-scrollbar">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-normal text-slate-800 uppercase tracking-wide mb-1.5">
-                      รหัสวัตถุดิบ (RM Code) <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={rmCode}
-                      onChange={(e) => setRmCode(e.target.value)}
-                      placeholder="เช่น RM-001"
-                      className="w-full h-11 px-3.5 bg-white border border-slate-300 rounded-xl text-sm font-mono font-normal text-slate-900 focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 shadow-2xs transition-all"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-normal text-slate-800 uppercase tracking-wide mb-1.5">
-                      ชื่อวัตถุดิบ <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={rmName}
-                      onChange={(e) => setRmName(e.target.value)}
-                      placeholder="เช่น ใบตอง, ใบเตย"
-                      className="w-full h-11 px-3.5 bg-white border border-slate-300 rounded-xl text-sm font-normal text-slate-900 focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 shadow-2xs transition-all"
-                    />
-                  </div>
+            {/* Modal Form Content */}
+            <form onSubmit={handleSaveRm} className="p-6 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                    รหัสวัตถุดิบ (RM Code) <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={rmCode}
+                    onChange={(e) => setRmCode(e.target.value)}
+                    placeholder="เช่น RM-001"
+                    required
+                    className="w-full h-10 px-3.5 bg-white border border-slate-300 rounded-xl text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 transition-all placeholder:text-slate-400 placeholder:font-sans"
+                  />
                 </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                    ชื่อวัตถุดิบ <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={rmName}
+                    onChange={(e) => setRmName(e.target.value)}
+                    placeholder="เช่น ใบตอง, ใบเตย, มะพร้าว"
+                    required
+                    className="w-full h-10 px-3.5 bg-white border border-slate-300 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 transition-all placeholder:text-slate-400"
+                  />
+                </div>
+              </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="relative z-30">
-                  <label className="block text-sm font-normal text-slate-800 uppercase tracking-wide mb-1.5">
-                    หมวดหมู่สเปก QC (Category) <span className="text-rose-500">*</span>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                    หมวดหมู่สเปก QC <span className="text-rose-500">*</span>
                   </label>
                   <AutocompleteSelect
                     options={categoryOptions}
@@ -1054,7 +1621,7 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
                 </div>
 
                 <div>
-                  <label className="block text-sm font-normal text-slate-800 uppercase tracking-wide mb-1.5">
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
                     หน่วยนับ (Unit) <span className="text-rose-500">*</span>
                   </label>
                   <input
@@ -1063,43 +1630,43 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
                     onChange={(e) => setRmUnit(e.target.value)}
                     required
                     placeholder="เช่น kg, มัด, ตัว"
-                    className="w-full h-11 px-3.5 bg-white border border-slate-300 rounded-xl text-sm font-normal text-slate-900 focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 shadow-2xs transition-all"
-                  />
-                </div>
-
-                {/* Multi-select Suppliers List with Search */}
-                <div className="relative z-20">
-                  <label className="block text-sm font-normal text-slate-800 uppercase tracking-wide mb-1.5 flex items-center justify-between">
-                    <span>เลือก Supplier ที่จัดหาสินค้านี้ได้ (Multi-Select Autocomplete)</span>
-                    <span className="text-sm font-normal text-slate-500">พิมพ์/ค้นหาได้มากกว่า 1 ราย</span>
-                  </label>
-                  <MultiAutocompleteSelect
-                    options={supplierSelectOptions}
-                    selectedValues={selectedLinkedSupplierIds}
-                    onChange={setSelectedLinkedSupplierIds}
-                    placeholder="-- ค้นหาและเลือก Supplier ที่จัดหาสินค้านี้ได้ --"
-                    searchPlaceholder="พิมพ์รหัส หรือ ชื่อ Supplier เพื่อค้นหา..."
+                    className="w-full h-10 px-3.5 bg-white border border-slate-300 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 transition-all placeholder:text-slate-400"
                   />
                 </div>
               </div>
 
-              <div className="flex-none shrink-0 relative z-20 px-5 py-3.5 sm:px-7 sm:py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3 rounded-b-2xl sm:rounded-b-3xl">
+              {/* Multi-select Suppliers List */}
+              <div className="relative z-20">
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                  <span>เลือก Supplier ที่จัดหาสินค้านี้ได้</span>
+                  <span className="text-[11px] font-normal text-slate-500">เลือกได้หลายราย</span>
+                </label>
+                <MultiAutocompleteSelect
+                  options={supplierSelectOptions}
+                  selectedValues={selectedLinkedSupplierIds}
+                  onChange={setSelectedLinkedSupplierIds}
+                  placeholder="-- ค้นหาและเลือก Supplier ที่จัดหาสินค้านี้ได้ --"
+                  searchPlaceholder="พิมพ์รหัส หรือ ชื่อ Supplier..."
+                />
+              </div>
+
+              {/* Modal Footer */}
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setIsRmModalOpen(false)}
-                  className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-normal text-sm rounded-xl transition-all cursor-pointer active:scale-95"
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-sm rounded-xl transition-all cursor-pointer"
                 >
                   ยกเลิก
                 </button>
                 <button
-                  type="button"
-                  onClick={handleSaveRm}
-                  className="px-6 py-2.5 bg-gradient-to-r from-sky-600 to-sky-700 hover:from-sky-500 hover:to-sky-600 text-white font-normal text-sm rounded-xl shadow-lg shadow-sky-600/25 transition-all cursor-pointer flex items-center gap-2 active:scale-95"
+                  type="submit"
+                  className="px-5 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-medium text-sm rounded-xl shadow-sm transition-all cursor-pointer flex items-center gap-2"
                 >
-                  💾 บันทึกวัตถุดิบ & การผูก Supplier
+                  💾 บันทึกวัตถุดิบ & ผูก Supplier
                 </button>
               </div>
-            </div>
+            </form>
           </div>
         </div>
       )}
@@ -1108,102 +1675,113 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
       {/* MODAL 3: ADD/EDIT QC SAMPLING RULE */}
       {/* ------------------------------------------------------------- */}
       {isRuleModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/70 backdrop-blur-md animate-fade-in overflow-y-auto">
-          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-[0_25px_60px_-15px_rgba(0,0,0,0.3)] border border-slate-200/80 w-full max-w-md max-h-[calc(100vh-2rem)] sm:max-h-[90vh] flex flex-col my-auto overflow-hidden transform transition-all relative">
-            <div className="flex-none bg-gradient-to-r from-slate-950 via-purple-950 to-slate-900 px-5 py-4 sm:px-7 sm:py-5 text-white flex items-center justify-between rounded-t-2xl sm:rounded-t-3xl border-b border-purple-900/40">
-              <h3 className="text-base sm:text-lg font-normal text-white flex items-center gap-2.5">
-                <Sliders className="w-5 h-5 text-purple-400" />
-                {editingRuleIndex !== null ? 'แก้ไขเกณฑ์สุ่มตรวจ' : 'เพิ่มเกณฑ์สุ่มตรวจใหม่'} ({selectedMatrixCategory})
-              </h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200/80 w-full max-w-md overflow-visible transform transition-all relative my-auto">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-purple-50/80 via-slate-50 to-purple-50/50 px-6 py-4.5 border-b border-slate-200/80 rounded-t-3xl flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center text-lg shadow-2xs">
+                  📐
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    {editingRuleIndex !== null ? 'แก้ไขเกณฑ์สุ่มตรวจ' : 'เพิ่มเกณฑ์สุ่มตรวจใหม่'}
+                  </h3>
+                  <p className="text-xs text-slate-500">หมวดหมู่: {selectedMatrixCategory}</p>
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={() => setIsRuleModalOpen(false)}
-                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+                className="w-8 h-8 rounded-full bg-slate-200/60 hover:bg-slate-200 text-slate-500 hover:text-slate-800 transition-all flex items-center justify-center cursor-pointer active:scale-95"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
-              <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-7 space-y-4 custom-scrollbar">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-normal text-slate-800 uppercase tracking-wide mb-1.5">
-                      น้ำหนักต่ำสุด (Min kg) <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={ruleMinQty}
-                      onChange={(e) => setRuleMinQty(parseFloat(e.target.value) || 0)}
-                      required
-                      className="w-full h-11 px-3.5 bg-white border border-slate-300 rounded-xl text-sm font-normal text-slate-900 focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 shadow-2xs transition-all"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-normal text-slate-800 uppercase tracking-wide mb-1.5">
-                      น้ำหนักสูงสุด (Max kg) <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={ruleMaxQty}
-                      onChange={(e) => setRuleMaxQty(parseFloat(e.target.value) || 0)}
-                      required
-                      className="w-full h-11 px-3.5 bg-white border border-slate-300 rounded-xl text-sm font-normal text-slate-900 focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 shadow-2xs transition-all"
-                    />
-                  </div>
-                </div>
-
+            {/* Modal Form Content */}
+            <form onSubmit={handleSaveRule} className="p-6 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-normal text-slate-800 uppercase tracking-wide mb-1.5">
-                    ปริมาณสุ่มตรวจ (Sample Qty - kg) <span className="text-rose-500">*</span>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                    น้ำหนักต่ำสุด (Min kg) <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="number"
                     step="0.1"
-                    value={ruleSampleQty}
-                    onChange={(e) => setRuleSampleQty(parseFloat(e.target.value) || 0)}
+                    value={ruleMinQty}
+                    onChange={(e) => setRuleMinQty(parseFloat(e.target.value) || 0)}
                     required
-                    className="w-full h-11 px-3.5 bg-white border border-slate-300 rounded-xl text-sm font-normal text-sky-700 focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 shadow-2xs transition-all"
+                    className="w-full h-10 px-3.5 bg-white border border-slate-300 rounded-xl text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 transition-all"
                   />
                 </div>
-
                 <div>
-                  <label className="block text-sm font-normal text-slate-800 uppercase tracking-wide mb-1.5">
-                    ของเสียยอมรับได้สูงสุด (Max Defect - kg) <span className="text-rose-500">*</span>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                    น้ำหนักสูงสุด (Max kg) <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="number"
-                    step="0.01"
-                    value={ruleAcceptDefectQty}
-                    onChange={(e) => setRuleAcceptDefectQty(parseFloat(e.target.value) || 0)}
+                    step="0.1"
+                    value={ruleMaxQty}
+                    onChange={(e) => setRuleMaxQty(parseFloat(e.target.value) || 0)}
                     required
-                    className="w-full h-11 px-3.5 bg-white border border-slate-300 rounded-xl text-sm font-normal text-rose-700 focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 shadow-2xs transition-all"
+                    className="w-full h-10 px-3.5 bg-white border border-slate-300 rounded-xl text-sm font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 transition-all"
                   />
-                  <p className="text-sm text-slate-500 mt-1 font-normal">
-                    คิดเป็น {ruleSampleQty > 0 ? ((ruleAcceptDefectQty / ruleSampleQty) * 100).toFixed(2) : 0}% Defect ยินยอม
-                  </p>
                 </div>
               </div>
 
-              <div className="flex-none shrink-0 relative z-20 px-5 py-3.5 sm:px-7 sm:py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3 rounded-b-2xl sm:rounded-b-3xl">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                  ปริมาณสุ่มตรวจ (Sample Qty - kg) <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={ruleSampleQty}
+                  onChange={(e) => setRuleSampleQty(parseFloat(e.target.value) || 0)}
+                  required
+                  className="w-full h-10 px-3.5 bg-white border border-slate-300 rounded-xl text-sm font-mono font-semibold text-sky-700 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 transition-all"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                  ของเสียยอมรับได้สูงสุด (Max Defect - kg) <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={ruleAcceptDefectQty}
+                  onChange={(e) => setRuleAcceptDefectQty(parseFloat(e.target.value) || 0)}
+                  required
+                  className="w-full h-10 px-3.5 bg-white border border-slate-300 rounded-xl text-sm font-mono font-semibold text-rose-600 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 transition-all"
+                />
+                <p className="text-xs text-slate-500 mt-1 font-normal">
+                  คิดเป็น{' '}
+                  <span className="font-mono font-medium text-slate-800">
+                    {ruleSampleQty > 0 ? ((ruleAcceptDefectQty / ruleSampleQty) * 100).toFixed(2) : 0}%
+                  </span>{' '}
+                  Defect ยินยอม
+                </p>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => setIsRuleModalOpen(false)}
-                  className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-normal text-sm rounded-xl transition-all cursor-pointer active:scale-95"
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-sm rounded-xl transition-all cursor-pointer"
                 >
                   ยกเลิก
                 </button>
                 <button
-                  type="button"
-                  onClick={handleSaveRule}
-                  className="px-6 py-2.5 bg-gradient-to-r from-sky-600 to-sky-700 hover:from-sky-500 hover:to-sky-600 text-white font-normal text-sm rounded-xl shadow-lg shadow-sky-600/25 transition-all cursor-pointer flex items-center gap-2 active:scale-95"
+                  type="submit"
+                  className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-medium text-sm rounded-xl shadow-sm transition-all cursor-pointer flex items-center gap-2"
                 >
                   💾 บันทึกเกณฑ์สุ่มตรวจ
                 </button>
               </div>
-            </div>
+            </form>
           </div>
         </div>
       )}
