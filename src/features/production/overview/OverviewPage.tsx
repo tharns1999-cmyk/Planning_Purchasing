@@ -5,7 +5,6 @@ import {
   AlertTriangle,
   Flame,
   AlertOctagon,
-  RefreshCw,
   ShoppingBag,
   CheckCircle2,
   Clock,
@@ -119,25 +118,13 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({ referenceDate }) => 
       variants={activeVariants}
     >
       {/* Top Bar Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200/80 pb-3">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight leading-snug">
-            ภาพรวมการผลิตรายสัปดาห์
-          </h1>
-          <p className="text-sm text-slate-500 mt-1 leading-normal">
-            สรุปสถานะใบสั่งซื้อ แผนการผลิตประจำสัปดาห์ และรายการแจ้งเตือนเร่งด่วน (กดที่ Card เพื่อดูรายละเอียด)
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            size="sm"
-            leftIcon={<RefreshCw className="w-4 h-4 text-slate-500" />}
-            onClick={loadDashboardData}
-          >
-            รีเฟรชข้อมูล
-          </Button>
-        </div>
+      <div className="border-b border-slate-200/80 pb-3">
+        <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight leading-snug">
+          ภาพรวมการผลิตรายสัปดาห์
+        </h1>
+        <p className="text-sm text-slate-500 mt-1 leading-normal">
+          สรุปสถานะการผลิตประจำสัปดาห์และรายการแจ้งเตือน
+        </p>
       </div>
 
       {/* KPI Cards Grid (6 Metric Cards - Clickable & 100% Single Source of Truth) */}

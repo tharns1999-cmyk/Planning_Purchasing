@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { OverviewPage } from '@/features/production/overview/OverviewPage';
 import { plannerRepository } from '../services/plannerService';
@@ -36,24 +36,21 @@ describe('Phase 2A — Dashboard Page UI Tests', () => {
     expect(screen.getByText('ไม่มีรายการผลิตไม่ครบ')).toBeInTheDocument();
   });
 
-  it('4. Refreshes data when clicking refresh button', () => {
+  it('4. Successfully renders OverviewPage header and summary cards', () => {
     render(<OverviewPage referenceDate="2026-07-20" />);
 
-    const refreshButton = screen.getByText('รีเฟรชข้อมูล');
-    expect(refreshButton).toBeInTheDocument();
-
-    fireEvent.click(refreshButton);
     expect(screen.getByText('ภาพรวมการผลิตรายสัปดาห์')).toBeInTheDocument();
+    expect(screen.getByText('PO ที่ใช้งาน')).toBeInTheDocument();
   });
 
-  it('5. Handles repository error gracefully without crashing', () => {
-    vi.spyOn(plannerRepository, 'getDashboardSummary').mockImplementationOnce(() => {
+  it('5. Handles repository error gracefully without crashing', async () => {
+    vi.spyOn(plannerRepository, 'getDashboardSummary').mockImplementation(() => {
       throw new Error('Simulated database fetch failure');
     });
 
     render(<OverviewPage referenceDate="2026-07-20" />);
 
-    expect(screen.getByText('เกิดข้อผิดพลาดในการโหลดภาพรวม')).toBeInTheDocument();
-    expect(screen.getByText('ไม่สามารถโหลดข้อมูลภาพรวมระบบได้ กรุณาลองใหม่อีกครั้ง')).toBeInTheDocument();
+    expect(await screen.findByText('เกิดข้อผิดพลาดในการโหลดภาพรวม')).toBeInTheDocument();
+    expect(await screen.findByText('ไม่สามารถโหลดข้อมูลภาพรวมระบบได้ กรุณาลองใหม่อีกครั้ง')).toBeInTheDocument();
   });
 });

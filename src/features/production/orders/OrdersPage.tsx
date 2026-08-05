@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
-import { Edit2, FileText, Plus, Search, Filter, RefreshCw, Building2, Calendar, Package, Flame, X, Layers, CheckCircle2 } from 'lucide-react';
+import { Edit2, FileText, Plus, Search, Filter, Building2, Calendar, Package, Flame, X, Layers, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/common/Button';
 import { Badge } from '@/components/common/Badge';
 import { Input } from '@/components/common/Input';
@@ -317,18 +317,10 @@ export const OrdersPage: React.FC = () => {
             ใบสั่งซื้อ (Sales Orders)
           </h1>
           <p className="text-sm text-slate-500 mt-1 leading-normal">
-            จัดการ PO และรายการสินค้าที่ต้องนำไปวางแผนการผลิตรายสัปดาห์
+            รายการใบสั่งซื้อและสินค้าสำหรับวางแผนการผลิต
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            size="sm"
-            leftIcon={<RefreshCw className="w-4 h-4 text-slate-500" />}
-            onClick={loadOrdersData}
-          >
-            รีเฟรช
-          </Button>
           <Button
             variant="primary"
             size="md"

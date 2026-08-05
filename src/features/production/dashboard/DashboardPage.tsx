@@ -10,7 +10,6 @@ import {
   Search,
   Building2,
   Calendar,
-  RefreshCw,
   TrendingUp,
 } from 'lucide-react';
 import { Button } from '@/components/common/Button';
@@ -251,26 +250,14 @@ export const DashboardPage: React.FC = () => {
       variants={activeVariants}
     >
       {/* Top Bar Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200/80 pb-3">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight leading-snug flex items-center gap-2.5">
-            <LayoutDashboard className="w-7 h-7 text-sky-600" />
-            <span>สรุปภาพรวมการผลิต (Production Dashboard)</span>
-          </h1>
-          <p className="text-sm text-slate-500 mt-1 leading-normal">
-            ติดตามสถานะใบสั่งซื้อ (PO), เปอร์เซ็นต์ความคืบหน้าการผลิต (% Fulfillment) และตัวกรองข้อมูลหลายมิติ
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            size="sm"
-            leftIcon={<RefreshCw className="w-4 h-4 text-slate-500" />}
-            onClick={loadData}
-          >
-            รีเฟรชข้อมูล
-          </Button>
-        </div>
+      <div className="border-b border-slate-200/80 pb-3">
+        <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight leading-snug flex items-center gap-2.5">
+          <LayoutDashboard className="w-7 h-7 text-sky-600" />
+          <span>สรุปภาพรวมการผลิต (Production Dashboard)</span>
+        </h1>
+        <p className="text-sm text-slate-500 mt-1 leading-normal">
+          รายงานสถานะและดัชนีชี้วัดความคืบหน้าการผลิต
+        </p>
       </div>
 
       {/* 4 Summary Cards */}

@@ -50,8 +50,21 @@ export interface DeliveryCalendarItem {
 }
 
 export const CalendarPage: React.FC = () => {
-  // Week Navigation State
-  const [currentWeek, setCurrentWeek] = useState(() => getProductionWeek());
+  // Week Navigation State (defaults to first order due date week, active plan week, or real-world current week)
+  const [currentWeek, setCurrentWeek] = useState(() => {
+    try {
+      const snap = plannerRepository.getSnapshot();
+      const firstLine = snap?.entities?.salesOrderLines?.[0];
+      if (firstLine?.dueDate) {
+        return getProductionWeek(firstLine.dueDate);
+      }
+      const activePlan = snap?.entities?.weeklyPlans?.find((p) => p.status !== PlanStatus.CANCELLED);
+      if (activePlan?.weekStart) {
+        return getProductionWeek(activePlan.weekStart);
+      }
+    } catch {}
+    return getProductionWeek();
+  });
 
   // Filter States
   const [searchQuery, setSearchQuery] = useState('');

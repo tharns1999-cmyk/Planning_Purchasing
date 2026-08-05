@@ -38,12 +38,13 @@ export const BoardCard: React.FC<BoardCardProps> = ({
 
   return (
     <div
+      tabIndex={0}
       draggable={isDraftStatus}
       onDragStart={onDragStart}
-      className={`p-2.5 rounded-lg text-left shadow-2xs space-y-1.5 hover:border-slate-300 transition-all group relative border ${
-        isDraftStatus ? 'cursor-grab active:cursor-grabbing hover:shadow-md' : 'cursor-default'
+      className={`p-2.5 rounded-lg text-left shadow-2xs space-y-1.5 transition-all group relative border focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:outline-none ${
+        isDraftStatus ? 'cursor-grab active:cursor-grabbing hover:shadow-md hover:border-sky-500' : 'cursor-default'
       } ${
-        allocation.highlightOnPlan ? 'bg-amber-100/90 border-amber-300 highlight-on-plan' : 'bg-white border-slate-200'
+        allocation.highlightOnPlan ? 'bg-amber-100/90 border-amber-400 highlight-on-plan' : 'bg-white border-slate-300 hover:border-slate-400'
       }`}
     >
       {/* Top Row: Title (Left) + Quantity (Right) + Action Buttons */}

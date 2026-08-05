@@ -109,7 +109,7 @@ describe('PHASE 3C.2 — Printable Plan Notes & Customer Tags', () => {
     render(<PlanningPage />);
 
     await waitFor(() => {
-      expect(screen.getByText('ITC+E')).toBeInTheDocument();
+      expect(screen.getAllByText('ITC+E').length).toBeGreaterThan(0);
       expect(screen.getByText('หมายเหตุ: ใช้ไลน์บ่าย / รอวัตถุดิบ')).toBeInTheDocument();
     });
 

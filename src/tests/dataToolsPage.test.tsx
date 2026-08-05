@@ -114,7 +114,7 @@ describe('PHASE 4C — Data Tools Page Tests', () => {
       expect(screen.getByText('ยืนยันการล้างข้อมูลและเริ่มใหม่')).toBeInTheDocument();
     });
 
-    const confirmBtn = screen.getByText('ยืนยันการล้างข้อมูล');
+    const confirmBtn = screen.getByText('รีเซ็ตเป็น Seed Data');
     expect(confirmBtn).toBeDisabled();
 
     // Type incorrect case 'reset' -> should remain disabled

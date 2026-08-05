@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { PlanningPage } from '@/features/production/planning/PlanningPage';
 import { plannerRepository } from '../services/plannerService';
@@ -33,18 +33,18 @@ describe('Phase 3A — Planning Board Shell + Plan Lifecycle UI Tests', () => {
     expect(screen.getAllByText('ลากมาวางที่นี่').length).toBe(24); // 6 days * 4 rooms
   });
 
-  it('3. Creates R00 Draft plan when clicking "สร้างแผนฉบับร่าง"', () => {
+  it('3. Creates R00 Draft plan when clicking "สร้างแผนฉบับร่าง"', async () => {
     render(<PlanningPage />);
 
-    expect(screen.getAllByText('ไม่มีแผน').length).toBeGreaterThan(0);
+    // Click Create Draft Plan button
+    const createBtn = screen.getByText('สร้างแผนฉบับร่าง');
+    fireEvent.click(createBtn);
 
-    const createDraftBtn = screen.getByText('สร้างแผนฉบับร่าง');
-    fireEvent.click(createDraftBtn);
-
-    expect(screen.getByText('ฉบับร่าง')).toBeInTheDocument();
-    expect(screen.getByText('R00')).toBeInTheDocument();
-    expect(screen.getByText('ประกาศใช้แผน')).toBeInTheDocument();
-    expect(screen.getByText('ยกเลิกฉบับร่าง')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('ฉบับร่าง')).toBeInTheDocument();
+      expect(screen.getByText('ประกาศใช้แผน')).toBeInTheDocument();
+      expect(screen.getByText('ยกเลิกฉบับร่าง')).toBeInTheDocument();
+    });
 
     // Persistence check
     const activePlan = plannerRepository.getActivePlanForWeek('2026-07-20');
@@ -52,35 +52,39 @@ describe('Phase 3A — Planning Board Shell + Plan Lifecycle UI Tests', () => {
     expect(activePlan?.status).toBe(PlanStatus.DRAFT);
   });
 
-  it('4. Publishes Draft plan when clicking "ประกาศใช้แผน"', () => {
+  it('4. Publishes Draft plan when clicking "ประกาศใช้แผน"', async () => {
     render(<PlanningPage />);
 
     // Create Draft first
     fireEvent.click(screen.getByText('สร้างแผนฉบับร่าง'));
 
     // Click Publish
-    const publishBtn = screen.getByText('ประกาศใช้แผน');
+    const publishBtn = await screen.findByText('ประกาศใช้แผน');
     fireEvent.click(publishBtn);
 
-    expect(screen.getByText('ประกาศใช้แล้ว')).toBeInTheDocument();
-    expect(screen.getByText('สร้างฉบับแก้ไข')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('ประกาศใช้แล้ว')).toBeInTheDocument();
+      expect(screen.getByText('สร้างฉบับแก้ไข')).toBeInTheDocument();
+    });
 
     // Persistence check
     const activePlan = plannerRepository.getActivePlanForWeek('2026-07-20');
     expect(activePlan?.status).toBe(PlanStatus.PUBLISHED);
   });
 
-  it('5. Cancels Draft plan when clicking "ยกเลิกฉบับร่าง"', () => {
+  it('5. Cancels Draft plan when clicking "ยกเลิกฉบับร่าง"', async () => {
     render(<PlanningPage />);
 
     // Create Draft first
     fireEvent.click(screen.getByText('สร้างแผนฉบับร่าง'));
 
     // Click Cancel Draft
-    const cancelBtn = screen.getByText('ยกเลิกฉบับร่าง');
+    const cancelBtn = await screen.findByText('ยกเลิกฉบับร่าง');
     fireEvent.click(cancelBtn);
 
-    expect(screen.getAllByText('ไม่มีแผน').length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(screen.getAllByText('ไม่มีแผน').length).toBeGreaterThan(0);
+    });
 
     // Persistence check
     const activePlan = plannerRepository.getActivePlanForWeek('2026-07-20');

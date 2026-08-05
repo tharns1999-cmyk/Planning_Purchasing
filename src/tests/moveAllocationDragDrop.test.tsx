@@ -237,7 +237,7 @@ describe('PHASE 3D.1 — Move Allocation Card by Drag & Drop Tests', () => {
     fireEvent.drop(targetCell, createEvent);
 
     await waitFor(() => {
-      expect(screen.getByText('จำนวนที่วางแผนผลิต *')).toBeInTheDocument();
+      expect(screen.getByText('ระบุจำนวนวางแผนผลิต')).toBeInTheDocument();
     });
   });
 

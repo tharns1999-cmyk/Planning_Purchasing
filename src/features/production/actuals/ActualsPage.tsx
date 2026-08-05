@@ -4,7 +4,6 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
-  RefreshCw,
   CheckCircle2,
   AlertCircle,
   FileCheck,
@@ -213,25 +212,13 @@ export const ActualsPage: React.FC = () => {
       </AnimatePresence>
 
       {/* Header Title & Subtitle */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-200/80 pb-3">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight leading-snug">
-            ผลการผลิตจริง (Production Actuals)
-          </h1>
-          <p className="text-sm text-slate-500 mt-1 leading-normal">
-            บันทึกและติดตามผลการผลิตจริงจากแผนการผลิตที่ประกาศใช้แล้ว (Published Plan)
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            size="sm"
-            leftIcon={<RefreshCw className="w-4 h-4 text-slate-500" />}
-            onClick={loadPageData}
-          >
-            รีเฟรช
-          </Button>
-        </div>
+      <div className="border-b border-slate-200/80 pb-3">
+        <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight leading-snug">
+          ผลการผลิตจริง (Production Actuals)
+        </h1>
+        <p className="text-sm text-slate-500 mt-1 leading-normal">
+          บันทึกและติดตามผลการผลิตจริงประจำสัปดาห์
+        </p>
       </div>
 
       {/* Week Navigation Toolbar */}

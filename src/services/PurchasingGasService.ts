@@ -69,12 +69,22 @@ export class PurchasingGasService {
                 phone: formatPhoneNumber(s.phone) === '-' ? '' : formatPhoneNumber(s.phone),
               }));
 
+              const rawReceivingGas: ReceivingRecord[] = res.data.receivingRecords || [];
+              const seenGasIds = new Set<string>();
+              const cleanReceivingGas: ReceivingRecord[] = [];
+              rawReceivingGas.forEach((r) => {
+                if (r && r.id && !seenGasIds.has(r.id)) {
+                  seenGasIds.add(r.id);
+                  cleanReceivingGas.push(r);
+                }
+              });
+
               const data: PurchasingDbData = {
                 suppliers: formattedSuppliers,
                 rmItems: res.data.rmItems || [],
                 defectMatrix: (res.data.defectMatrix as Record<string, DefectRule[]>) || {},
                 defectCategories: res.data.defectCategories || [],
-                receivingRecords: res.data.receivingRecords || [],
+                receivingRecords: cleanReceivingGas,
                 issueLogs: res.data.issueLogs || [],
               };
               
@@ -135,12 +145,22 @@ export class PurchasingGasService {
         const rawRmItems: RMItem[] = parsed.rmItems || [];
         const rawDefectCats: DefectCategoryItem[] = parsed.defectCategories || [];
 
+        const rawReceiving: ReceivingRecord[] = parsed.receivingRecords || [];
+        const seenRecIds = new Set<string>();
+        const cleanReceiving: ReceivingRecord[] = [];
+        rawReceiving.forEach((r) => {
+          if (r && r.id && !seenRecIds.has(r.id)) {
+            seenRecIds.add(r.id);
+            cleanReceiving.push(r);
+          }
+        });
+
         return {
           suppliers: formattedSuppliers,
           rmItems: rawRmItems.length > 0 ? rawRmItems : MOCK_RM_ITEMS,
           defectMatrix: parsed.defectMatrix || {},
           defectCategories: rawDefectCats,
-          receivingRecords: parsed.receivingRecords || [],
+          receivingRecords: cleanReceiving,
           issueLogs: parsed.issueLogs || [],
         };
       }
@@ -233,7 +253,10 @@ export class PurchasingGasService {
 
   static async saveReceivingRecord(record: ReceivingRecord): Promise<void> {
     const current = this.loadFromLocalStorage();
-    const updated = [record, ...current.receivingRecords];
+    const exists = current.receivingRecords.some((r) => r.id === record.id);
+    const updated = exists
+      ? current.receivingRecords.map((r) => (r.id === record.id ? record : r))
+      : [record, ...current.receivingRecords];
     this.saveToLocalStorage({ receivingRecords: updated });
 
     if (this.isGoogleAvailable) {
@@ -249,7 +272,16 @@ export class PurchasingGasService {
     if (!records || records.length === 0) return;
     
     const current = this.loadFromLocalStorage();
-    const updated = [...records, ...current.receivingRecords];
+    const batchMap = new Map<string, ReceivingRecord>();
+    records.forEach((r) => batchMap.set(r.id, r));
+
+    const updated = [...records];
+    current.receivingRecords.forEach((r) => {
+      if (!batchMap.has(r.id)) {
+        updated.push(r);
+      }
+    });
+
     this.saveToLocalStorage({ receivingRecords: updated });
 
     if (this.isGoogleAvailable) {

@@ -142,7 +142,7 @@ describe('Phase 3C.1 — Fix FG Output Qty Deduction Rule Tests', () => {
     );
 
     const plannedQtyInput = screen.getByPlaceholderText('เช่น 10');
-    const fgOutputQtyInput = screen.getByPlaceholderText('เช่น 60');
+    const fgOutputQtyInput = screen.getByPlaceholderText(/กรุณาประมาณจำนวน/i);
 
     fireEvent.change(plannedQtyInput, { target: { value: '10' } });
     fireEvent.change(fgOutputQtyInput, { target: { value: '60' } });
@@ -179,6 +179,7 @@ describe('Phase 3C.1 — Fix FG Output Qty Deduction Rule Tests', () => {
 
     const queueData = plannerRepository.getPlanningQueueData('2026-07-20');
     const lineItem = queueData.fgItems.find((i) => i.salesOrderLineId === 'sol-1001-1');
-    expect(lineItem).toBeUndefined();
+    expect(lineItem?.remainingQty).toBe(0);
+    expect(lineItem?.planningStatus).toBe('ESTIMATED_COMPLETE');
   });
 });

@@ -7,7 +7,6 @@ import {
   Plus,
   Check,
   X,
-  RefreshCw,
   CheckCircle2,
   Pencil,
   Trash2,
@@ -48,8 +47,22 @@ function formatThaiDayAndDate(isoDateStr: string): { dayName: string; formattedD
 export const PlanningPage: React.FC = () => {
   const reducedMotion = useReducedMotion() ?? false;
 
-  // Current production week state (defaults to real-world current week)
-  const [currentWeek, setCurrentWeek] = useState(() => getProductionWeek());
+  // Current production week state (defaults to active plan / order week if data exists, otherwise real-world current week)
+  const [currentWeek, setCurrentWeek] = useState(() => {
+    try {
+      const snap = plannerRepository.getSnapshot();
+      const plans = snap?.entities?.weeklyPlans || [];
+      const activePlan = plans.find((p) => p.status !== PlanStatus.CANCELLED) || plans[0];
+      if (activePlan?.weekStart) {
+        return getProductionWeek(activePlan.weekStart);
+      }
+      const firstLine = snap?.entities?.salesOrderLines?.[0];
+      if (firstLine?.dueDate) {
+        return getProductionWeek(firstLine.dueDate);
+      }
+    } catch {}
+    return getProductionWeek();
+  });
   const [boardData, setBoardData] = useState<PlanningBoardDataDetail | null>(() => {
     try { return plannerRepository.getPlanningBoardData(currentWeek.weekStart); } catch { return null; }
   });
@@ -61,9 +74,10 @@ export const PlanningPage: React.FC = () => {
   });
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(() => {
     try {
+      const active = plannerRepository.getActivePlanForWeek(currentWeek.weekStart);
+      if (active) return active.id;
       const plans = plannerRepository.listWeekPlans(currentWeek.weekStart);
-      const pub = plans.find((p: WeeklyPlan) => p.status === PlanStatus.PUBLISHED);
-      return pub ? pub.id : (plans[0]?.id || null);
+      return plans[0]?.id || null;
     } catch { return null; }
   });
 
@@ -90,6 +104,22 @@ export const PlanningPage: React.FC = () => {
   const [boardNoteModalOpen, setBoardNoteModalOpen] = useState<boolean>(false);
   const [selectedNoteTarget, setSelectedNoteTarget] = useState<{ productionDate: string; roomId: string } | null>(null);
   const [editingBoardNote, setEditingBoardNote] = useState<BoardNote | null>(null);
+
+  // UX/UI Collapsible State
+  const [isQueueCollapsed, setIsQueueCollapsed] = useState<boolean>(false);
+
+  // Keyboard Event Listener (Ctrl+B to toggle Queue Panel)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        setIsQueueCollapsed((prev) => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const loadPageData = useCallback(async () => {
     if (!plannerRepository.isInitialized) {
@@ -717,36 +747,26 @@ export const PlanningPage: React.FC = () => {
       </AnimatePresence>
 
       {/* Header Page Title & Subtitle */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-200/80 pb-3">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight leading-snug">
-            วางแผนการผลิต (Weekly Planning Board)
-          </h1>
-          <p className="text-sm text-slate-500 mt-1 leading-normal">
-            จัดวางตารางการผลิตรายสัปดาห์ จำแนกตามสายการผลิต (ห้องผลิต R1–R4)
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            size="sm"
-            leftIcon={<RefreshCw className="w-4 h-4 text-slate-500" />}
-            onClick={loadPageData}
-          >
-            รีเฟรช
-          </Button>
-        </div>
+      <div className="border-b border-slate-200/80 pb-3">
+        <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight leading-snug">
+          วางแผนการผลิต (Weekly Planning Board)
+        </h1>
+        <p className="text-sm text-slate-500 mt-1 leading-normal">
+          ตารางจัดวางการผลิตรายสัปดาห์ (ห้องผลิต R1–R4)
+        </p>
       </div>
 
-      {/* 2-Column Responsive Flex Layout: Queue Panel (Balanced ~290px width) + Right Column (Toolbar + Board Grid) */}
-      <div className="flex flex-col lg:flex-row gap-4 items-start w-full">
-        {/* Left Column: Planning Queue Panel (Moves up to top level) */}
-        <div className="w-full lg:w-[290px] lg:shrink-0">
+      {/* 2-Column Responsive Flex Layout: Queue Panel + Right Column (Toolbar + Board Grid) */}
+      <div className="flex flex-col lg:flex-row gap-4 items-start w-full transition-all">
+        {/* Left Column: Planning Queue Panel */}
+        <div className={`w-full transition-all duration-200 ${isQueueCollapsed ? 'lg:w-[56px] lg:shrink-0' : 'lg:w-[290px] lg:shrink-0'}`}>
           <PlanningQueuePanel
             fgItems={queueData?.fgItems || []}
             wipPrepItems={queueData?.wipPrepItems || []}
             reducedMotion={reducedMotion}
             onRefresh={loadPageData}
+            isCollapsed={isQueueCollapsed}
+            onToggleCollapse={() => setIsQueueCollapsed((prev) => !prev)}
           />
         </div>
 
@@ -934,12 +954,22 @@ export const PlanningPage: React.FC = () => {
                       <span className="text-xs sm:text-sm font-bold">วันที่ / ห้องผลิต</span>
                     </div>
                   </th>
-                  {FIXED_ROOMS.map((room) => (
-                    <th key={room.id} className="py-3 px-2 text-center border-r border-slate-200 last:border-r-0 w-1/4 min-w-[190px] bg-slate-50">
-                      <div className="font-bold text-slate-900 text-xs sm:text-sm truncate">{room.id} - {room.name}</div>
-                      <div className="text-[11px] text-slate-400 font-normal truncate max-w-[220px] mx-auto">{room.description}</div>
-                    </th>
-                  ))}
+                  {FIXED_ROOMS.map((room, idx) => {
+                    const roomTints = [
+                      'bg-sky-50/70 border-b-2 border-b-sky-500 text-sky-900',
+                      'bg-amber-50/70 border-b-2 border-b-amber-500 text-amber-900',
+                      'bg-purple-50/70 border-b-2 border-b-purple-500 text-purple-900',
+                      'bg-emerald-50/70 border-b-2 border-b-emerald-500 text-emerald-900',
+                    ];
+                    const roomStyle = roomTints[idx % roomTints.length];
+
+                    return (
+                      <th key={room.id} className={`py-3 px-2 text-center border-r border-slate-200 last:border-r-0 w-1/4 min-w-[190px] ${roomStyle}`}>
+                        <div className="font-extrabold text-xs sm:text-sm truncate">{room.id} - {room.name}</div>
+                        <div className="text-[11px] opacity-75 font-medium truncate max-w-[220px] mx-auto">{room.description}</div>
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
@@ -964,6 +994,8 @@ export const PlanningPage: React.FC = () => {
                             return a.createdAt.localeCompare(b.createdAt);
                           });
 
+                        const totalOutputQty = cellAllocations.reduce((sum, a) => sum + (a.fgOutputQty || a.plannedQty || 0), 0);
+
                         const cellNotes = currentPlanBoardNotes
                           .filter((n) => n.productionDate === dayIso && n.roomId === room.id)
                           .sort((a, b) => {
@@ -978,22 +1010,29 @@ export const PlanningPage: React.FC = () => {
                             key={room.id}
                             onDragOver={handleDragOver}
                             onDrop={(e) => handleDropCell(e, dayIso, room.id, room.name)}
-                            className="py-3 px-2 text-center border-r border-slate-200 last:border-r-0 bg-white align-top min-w-[190px]"
+                            className="py-2.5 px-2 text-center border-r border-slate-200 last:border-r-0 bg-white align-top min-w-[190px]"
                           >
-                            {/* Draft action button to add manual note */}
-                            {isDraftStatus && (
-                              <div className="flex items-center justify-end mb-1.5">
+                            {/* Capacity / Workload Indicator Bar & Draft Add Note */}
+                            <div className="flex items-center justify-between gap-1 mb-1.5 min-h-[22px]">
+                              {cellAllocations.length > 0 ? (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-bold text-[10px] border border-slate-200" title="ภาระงานประจำวัน">
+                                  <span>{cellAllocations.length} ล็อต</span>
+                                  {totalOutputQty > 0 && <span>• {totalOutputQty.toLocaleString()}</span>}
+                                </span>
+                              ) : <span />}
+
+                              {isDraftStatus && (
                                 <button
                                   type="button"
                                   onClick={() => handleOpenAddBoardNote(dayIso, room.id)}
-                                  className="text-[10px] font-semibold text-sky-700 hover:text-sky-900 bg-sky-50 hover:bg-sky-100 px-1.5 py-0.5 rounded border border-sky-200 transition-colors cursor-pointer flex items-center gap-0.5"
+                                  className="text-[10px] font-semibold text-sky-700 hover:text-sky-900 bg-sky-50 hover:bg-sky-100 px-1.5 py-0.5 rounded border border-sky-200 transition-colors cursor-pointer flex items-center gap-0.5 ml-auto"
                                   title="เพิ่มหมายเหตุบนแผน"
                                 >
                                   <Plus className="w-3 h-3" />
                                   <span>+ หมายเหตุ</span>
                                 </button>
-                              </div>
-                            )}
+                              )}
+                            </div>
 
                             {cellAllocations.length === 0 && cellNotes.length === 0 ? (
                               <div className={

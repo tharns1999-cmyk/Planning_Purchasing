@@ -13,6 +13,8 @@ import {
   Pencil,
   Ban,
   CheckCircle2,
+  PanelLeft,
+  PanelLeftClose,
 } from 'lucide-react';
 import { Input } from '@/components/common/Input';
 import { Select } from '@/components/common/Select';
@@ -30,6 +32,8 @@ export interface PlanningQueuePanelProps {
   wipPrepItems: WipPrepItem[];
   reducedMotion?: boolean;
   onRefresh?: () => void;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
 export type QueueTab = 'FG' | 'WIP_PREP';
@@ -39,6 +43,8 @@ export const PlanningQueuePanel: React.FC<PlanningQueuePanelProps> = ({
   wipPrepItems,
   reducedMotion = false,
   onRefresh,
+  isCollapsed = false,
+  onToggleCollapse,
 }) => {
   const [activeTab, setActiveTab] = useState<QueueTab>('FG');
 
@@ -178,6 +184,38 @@ export const PlanningQueuePanel: React.FC<PlanningQueuePanelProps> = ({
 
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
+  // If collapsed on desktop, render compact icon rail
+  if (isCollapsed) {
+    return (
+      <div className="hidden lg:flex flex-col items-center py-3 px-2 bg-white border border-slate-200/90 rounded-xl shadow-2xs h-full space-y-4">
+        <button
+          type="button"
+          onClick={onToggleCollapse}
+          className="p-2 rounded-lg text-slate-500 hover:text-sky-700 hover:bg-sky-50 transition-colors cursor-pointer"
+          title="ขยายรายการรอวางแผน (Ctrl+B)"
+          aria-label="ขยายรายการรอวางแผน"
+        >
+          <PanelLeft className="w-5 h-5" />
+        </button>
+
+        <div className="relative flex flex-col items-center gap-1 cursor-pointer" onClick={onToggleCollapse} title="คลิกเพื่อขยาย Queue">
+          <div className="p-2 rounded-lg bg-sky-50 text-sky-600 border border-sky-200">
+            <Layers className="w-5 h-5" />
+          </div>
+          <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-500 text-white shadow-xs">
+            {fgItems.length}
+          </span>
+        </div>
+
+        <div className="flex-1 flex items-center justify-center">
+          <span className="text-xs font-semibold text-slate-400 select-none tracking-widest [writing-mode:vertical-lr] rotate-180">
+            รายการรอวางแผน ({fgItems.length})
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs overflow-hidden flex flex-col h-full">
       {/* Header & Tabs */}
@@ -187,13 +225,27 @@ export const PlanningQueuePanel: React.FC<PlanningQueuePanelProps> = ({
             <Layers className="w-3.5 h-3.5 text-sky-600 shrink-0" />
             <span className="truncate">รายการรอวางแผน (Queue)</span>
           </div>
-          <button
-            type="button"
-            onClick={() => setIsMobileOpen((prev) => !prev)}
-            className="lg:hidden px-2 py-0.5 text-[11px] font-semibold bg-white border border-slate-200 rounded-md text-sky-700 hover:bg-sky-50 transition-colors"
-          >
-            {isMobileOpen ? 'ย่อรายการ' : 'ขยายรายการ'}
-          </button>
+          <div className="flex items-center gap-1">
+            {onToggleCollapse && (
+              <button
+                type="button"
+                onClick={onToggleCollapse}
+                className="hidden lg:flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold bg-white border border-slate-200 rounded-md text-slate-600 hover:text-sky-700 hover:bg-sky-50 transition-colors cursor-pointer"
+                title="ซ่อนรายการรอวางแผน (Ctrl+B)"
+                aria-label="ซ่อน Queue Panel"
+              >
+                <PanelLeftClose className="w-3.5 h-3.5" />
+                <span>พับเก็บ</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setIsMobileOpen((prev) => !prev)}
+              className="lg:hidden px-2 py-0.5 text-[11px] font-semibold bg-white border border-slate-200 rounded-md text-sky-700 hover:bg-sky-50 transition-colors"
+            >
+              {isMobileOpen ? 'ย่อรายการ' : 'ขยายรายการ'}
+            </button>
+          </div>
         </div>
 
         {/* Tab Buttons */}

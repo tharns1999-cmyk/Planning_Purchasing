@@ -7,7 +7,6 @@ import {
   Search,
   Filter,
   AlertTriangle,
-  Info,
   Calendar,
   Scale,
   Percent,
@@ -233,11 +232,14 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
   // Edit Handlers
   const handleOpenEdit = (record: ReceivingRecord) => {
     setEditingRecord(record);
-    setEditBillNo(record.billNo);
-    setEditReceiveDate(record.receiveDate);
-    setEditReceiveQty(record.receiveQty.toString());
-    setEditDefectQty(record.defectQty.toString());
-    setEditRemark(record.remark || '');
+    setEditBillNo(String(record.billNo || ''));
+    // Normalize date: GAS may return full ISO string or locale string — always extract YYYY-MM-DD
+    const rawDate = String(record.receiveDate || '');
+    const normalizedDate = (rawDate.includes('T') ? rawDate.split('T')[0] : rawDate.substring(0, 10)) || '';
+    setEditReceiveDate(normalizedDate);
+    setEditReceiveQty(String(record.receiveQty ?? ''));
+    setEditDefectQty(String(record.defectQty ?? '0'));
+    setEditRemark(String(record.remark || ''));
     setIsEditModalOpen(true);
   };
 
@@ -247,13 +249,13 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
   };
 
   const editEvaluationResult = useMemo(() => {
-    if (!editingRecord || parseFloat(editReceiveQty) <= 0) {
+    if (!editingRecord || parseFloat(String(editReceiveQty)) <= 0) {
       return { sampleQty: 0, acceptMaxDefectQty: 0, defectPercent: 0, isPass: true };
     }
     return calculateDefectResult(
       editingRecord.rmCategory,
-      parseFloat(editReceiveQty) || 0,
-      parseFloat(editDefectQty) || 0,
+      parseFloat(String(editReceiveQty)) || 0,
+      parseFloat(String(editDefectQty)) || 0,
       defectMatrix || {}
     );
   }, [editingRecord, editReceiveQty, editDefectQty, defectMatrix]);
@@ -261,22 +263,34 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
   const handleSaveEdit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingRecord || !onUpdateReceivingRecord) return;
-    
-    if (!editBillNo || !editReceiveQty) {
-      alert('กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน');
+
+    const billNoVal = String(editBillNo || '').trim();
+    const receiveQtyVal = parseFloat(String(editReceiveQty)) || 0;
+    const dateVal = String(editReceiveDate || '').trim();
+
+    if (!billNoVal) {
+      alert('กรุณากรอกเลขที่บิล');
+      return;
+    }
+    if (!dateVal || !/^\d{4}-\d{2}-\d{2}$/.test(dateVal)) {
+      alert('กรุณาเลือกวันที่รับเข้าให้ถูกต้อง (รูปแบบ YYYY-MM-DD)');
+      return;
+    }
+    if (receiveQtyVal <= 0) {
+      alert('กรุณาระบุจำนวนรับเข้า (kg) ให้ถูกต้อง');
       return;
     }
 
     const updatedRecord: ReceivingRecord = {
       ...editingRecord,
-      billNo: editBillNo.trim(),
-      receiveDate: editReceiveDate,
-      receiveQty: parseFloat(editReceiveQty) || 0,
+      billNo: billNoVal,
+      receiveDate: dateVal,
+      receiveQty: receiveQtyVal,
       sampleQty: editEvaluationResult.sampleQty,
-      defectQty: parseFloat(editDefectQty) || 0,
+      defectQty: parseFloat(String(editDefectQty)) || 0,
       defectPercent: editEvaluationResult.defectPercent,
       isPass: editEvaluationResult.isPass,
-      remark: editRemark.trim(),
+      remark: String(editRemark || '').trim(),
     };
 
     onUpdateReceivingRecord(updatedRecord);
@@ -299,9 +313,26 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
   // Post-Production Handlers
   const handleOpenPostProd = (record: ReceivingRecord) => {
     setPostProdRecord(record);
-    setPostProdDefectQty(record.postProductionDefectQty !== undefined ? record.postProductionDefectQty.toString() : '');
-    setPostProdRemark(record.postProductionRemark || '');
-    setPostProdDate(record.postProductionDate || new Date().toISOString().split('T')[0] || '');
+    setPostProdDefectQty(record.postProductionDefectQty !== undefined && record.postProductionDefectQty !== null ? String(record.postProductionDefectQty) : '');
+    setPostProdRemark(String(record.postProductionRemark || ''));
+
+    // Normalize date: extract YYYY-MM-DD from postProductionDate, or fallback to receiveDate, or today
+    const rawPostDate = String(record.postProductionDate || '');
+    let normalizedDate = '';
+    if (rawPostDate) {
+      normalizedDate = (rawPostDate.includes('T') ? rawPostDate.split('T')[0] : rawPostDate.substring(0, 10)) || '';
+    }
+    if (!normalizedDate || !/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) {
+      const rawRecDate = String(record.receiveDate || '');
+      if (rawRecDate) {
+        normalizedDate = (rawRecDate.includes('T') ? rawRecDate.split('T')[0] : rawRecDate.substring(0, 10)) || '';
+      }
+    }
+    if (!normalizedDate || !/^\d{4}-\d{2}-\d{2}$/.test(normalizedDate)) {
+      normalizedDate = (new Date().toISOString().split('T')[0]) || '';
+    }
+
+    setPostProdDate(normalizedDate);
     setIsPostProdModalOpen(true);
   };
 
@@ -314,11 +345,17 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
     e.preventDefault();
     if (!postProdRecord || !onUpdateReceivingRecord) return;
     
+    const dateVal = String(postProdDate || '').trim();
+    if (!dateVal || !/^\d{4}-\d{2}-\d{2}$/.test(dateVal)) {
+      alert('กรุณาเลือกวันที่บันทึกให้ถูกต้อง (รูปแบบ YYYY-MM-DD)');
+      return;
+    }
+
     const updatedRecord: ReceivingRecord = {
       ...postProdRecord,
-      postProductionDefectQty: parseFloat(postProdDefectQty) || 0,
-      postProductionRemark: postProdRemark.trim(),
-      postProductionDate: postProdDate,
+      postProductionDefectQty: parseFloat(String(postProdDefectQty)) || 0,
+      postProductionRemark: String(postProdRemark || '').trim(),
+      postProductionDate: dateVal,
     };
 
     onUpdateReceivingRecord(updatedRecord);
@@ -328,8 +365,12 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
   // Derived filtered & paginated data
   const filteredHistory = useMemo(() => {
     const q = (searchQuery || '').toLowerCase();
+    const seenIds = new Set<string>();
     return (receivingRecords || []).filter((rec) => {
-      if (!rec) return false;
+      if (!rec || !rec.id) return false;
+      if (seenIds.has(rec.id)) return false;
+      seenIds.add(rec.id);
+
       const matchSearch =
         String(rec.billNo || '').toLowerCase().includes(q) ||
         String(rec.supplierName || '').toLowerCase().includes(q) ||
@@ -951,97 +992,103 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
       </div>
 
       {/* -------------------------------------------------------------
-          EDIT MODAL
+          EDIT MODAL — scrollable, responsive
       ------------------------------------------------------------- */}
       {isEditModalOpen && editingRecord && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-4 sm:p-6">
           {/* Backdrop */}
           <div
-            className="absolute inset-0 bg-slate-900/30 backdrop-blur-xs transition-opacity animate-in fade-in"
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity animate-in fade-in"
             onClick={handleCloseEdit}
           />
 
-          {/* Modal */}
-          <div className="relative bg-white rounded-3xl shadow-2xl border border-slate-200/80 w-full max-w-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 my-auto">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-sky-50/80 via-slate-50 to-sky-50/50 border-b border-slate-200/80 rounded-t-3xl px-6 py-4.5 flex items-center justify-between">
+          {/* Modal — max-h scrollable so it never overflows on small screens */}
+          <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-200/80 w-full max-w-xl flex flex-col max-h-[90dvh] sm:max-h-[85dvh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Header — sticky */}
+            <div className="bg-gradient-to-r from-sky-50/80 via-white to-sky-50/40 border-b border-slate-200/80 rounded-t-2xl px-5 py-4 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-sky-100 flex items-center justify-center text-lg text-sky-600 shadow-2xs">
-                  ✏️
+                <div className="w-9 h-9 rounded-xl bg-sky-100 flex items-center justify-center text-sky-600 shadow-sm">
+                  <Pencil className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-slate-900 leading-tight">แก้ไขข้อมูลรับเข้า</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">แก้ไขตัวเลขและรายละเอียดการรับเข้า (เฉพาะรายการที่บันทึกผิด)</p>
+                  <h3 className="text-base font-semibold text-slate-900 leading-tight">แก้ไขข้อมูลรับเข้า</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">แก้ไขเฉพาะรายการที่บันทึกผิด</p>
                 </div>
               </div>
               <button
+                type="button"
                 onClick={handleCloseEdit}
-                className="w-8 h-8 rounded-full bg-slate-200/60 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800 transition-colors cursor-pointer active:scale-95"
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800 transition-colors cursor-pointer active:scale-95"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Body */}
-            <div className="p-6">
+            {/* Body — scrollable */}
+            <div className="flex-1 overflow-y-auto overscroll-contain p-5 space-y-5">
               {/* Readonly Context */}
-              <div className="flex flex-wrap gap-4 mb-6 p-4 bg-slate-50 rounded-xl border border-slate-200">
+              <div className="flex flex-wrap gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
                 <div>
-                  <span className="block text-sm font-normal text-slate-500 uppercase">Supplier</span>
-                  <span className="text-base font-normal text-slate-800">{editingRecord.supplierName}</span>
+                  <span className="block text-xs font-medium text-slate-400 uppercase tracking-wide">Supplier</span>
+                  <span className="text-sm font-semibold text-slate-800 mt-0.5 block">{editingRecord.supplierName}</span>
                 </div>
                 <div>
-                  <span className="block text-sm font-normal text-slate-500 uppercase">วัตถุดิบ (RM)</span>
+                  <span className="block text-xs font-medium text-slate-400 uppercase tracking-wide">วัตถุดิบ (RM)</span>
                   <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className="text-base font-normal text-slate-900">{editingRecord.rmName}</span>
-                    <span className="text-sm font-normal text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded">
+                    <span className="text-sm font-semibold text-slate-900">{editingRecord.rmName}</span>
+                    <span className="text-xs font-medium text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded">
                       {editingRecord.rmCategory}
                     </span>
                   </div>
                 </div>
               </div>
 
-              <form id="editForm" onSubmit={handleSaveEdit} className="space-y-5">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <form id="editForm" onSubmit={handleSaveEdit} className="space-y-4" noValidate>
+                {/* Bill No + Date */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-normal text-slate-700 mb-1.5">เลขที่บิล (Bill No) <span className="text-rose-500">*</span></label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">เลขที่บิล (Bill No) <span className="text-rose-500">*</span></label>
                     <input
                       type="text"
                       value={editBillNo}
                       onChange={(e) => setEditBillNo(e.target.value)}
-                      required
-                      className="w-full h-9.5 px-3 bg-white border border-slate-300 rounded-lg text-base font-normal text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 transition-all"
+                      className="w-full h-9 px-3 bg-white border border-slate-300 rounded-lg text-sm font-normal text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 transition-all"
+                      placeholder="เลขที่บิล"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-normal text-slate-700 mb-1.5">วันที่รับเข้า <span className="text-rose-500">*</span></label>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">วันที่รับเข้า <span className="text-rose-500">*</span></label>
                     <input
                       type="date"
                       value={editReceiveDate}
                       onChange={(e) => setEditReceiveDate(e.target.value)}
-                      required
-                      className="w-full h-9.5 px-3 bg-white border border-slate-300 rounded-lg text-base font-normal text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 transition-all"
+                      className={`w-full h-9 px-3 bg-white border rounded-lg text-sm font-normal text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 transition-all ${
+                        !editReceiveDate ? 'border-rose-400 bg-rose-50' : 'border-slate-300'
+                      }`}
                     />
+                    {!editReceiveDate && (
+                      <p className="text-xs text-rose-500 mt-1">กรุณาเลือกวันที่รับเข้า</p>
+                    )}
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-4 border-t border-slate-100">
+                {/* Receive Qty + Defect Qty */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-slate-100">
                   <div>
-                    <label className="block text-sm font-normal text-slate-700 mb-1.5 flex items-center gap-1">
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5 flex items-center gap-1">
                       <Scale className="w-3.5 h-3.5 text-slate-400" /> รับเข้า (kg) <span className="text-rose-500">*</span>
                     </label>
                     <input
                       type="number"
                       step="0.01"
-                      min="0.1"
+                      min="0.01"
                       value={editReceiveQty}
                       onChange={(e) => setEditReceiveQty(e.target.value)}
-                      required
-                      className="w-full h-9.5 px-3 bg-white border border-slate-300 rounded-lg text-base font-normal text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 transition-all"
+                      className="w-full h-9 px-3 bg-white border border-slate-300 rounded-lg text-sm font-normal text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 transition-all"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-normal text-slate-700 mb-1.5 flex items-center gap-1">
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5 flex items-center gap-1">
                       <AlertTriangle className="w-3.5 h-3.5 text-rose-400" /> Defect ที่พบ (kg)
                     </label>
                     <input
@@ -1050,64 +1097,64 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
                       min="0"
                       value={editDefectQty}
                       onChange={(e) => setEditDefectQty(e.target.value)}
-                      className="w-full h-9.5 px-3 bg-rose-50 border border-rose-200 rounded-lg text-base font-normal text-rose-900 focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-600 transition-all"
+                      className="w-full h-9 px-3 bg-rose-50 border border-rose-200 rounded-lg text-sm font-normal text-rose-900 focus:outline-none focus:ring-2 focus:ring-rose-500/30 focus:border-rose-500 transition-all"
                     />
                   </div>
                 </div>
 
-                {/* Live Recalculation Display */}
-                <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-0">
-                  <div className="flex gap-6 w-full sm:w-auto">
+                {/* Live Recalculation */}
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex gap-5">
                     <div>
-                      <span className="block text-sm font-normal text-slate-500 uppercase">สุ่มตรวจ (Sample)</span>
-                      <span className="text-base font-normal text-sky-700">{editEvaluationResult.sampleQty} kg</span>
+                      <span className="block text-xs font-medium text-slate-400 uppercase tracking-wide">สุ่มตรวจ</span>
+                      <span className="text-sm font-semibold text-sky-700 mt-0.5 block">{editEvaluationResult.sampleQty} kg</span>
                     </div>
                     <div>
-                      <span className="block text-sm font-normal text-slate-500 uppercase">% Defect</span>
-                      <span className={`text-base font-normal ${editEvaluationResult.defectPercent > 0 ? 'text-rose-600' : 'text-slate-700'}`}>
+                      <span className="block text-xs font-medium text-slate-400 uppercase tracking-wide">% Defect</span>
+                      <span className={`text-sm font-semibold mt-0.5 block ${editEvaluationResult.defectPercent > 0 ? 'text-rose-600' : 'text-slate-700'}`}>
                         {editEvaluationResult.defectPercent}%
                       </span>
                     </div>
                   </div>
-                  <div>
-                    {editEvaluationResult.isPass ? (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-800 text-sm font-normal border border-emerald-200">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600" /> PASS (ผ่าน)
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-rose-100 text-rose-800 text-sm font-normal border border-rose-200">
-                        <XCircle className="w-4 h-4 text-rose-600" /> FAIL (ไม่ผ่าน)
-                      </span>
-                    )}
-                  </div>
+                  {editEvaluationResult.isPass ? (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-semibold border border-emerald-200">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> PASS (ผ่าน)
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-100 text-rose-800 text-xs font-semibold border border-rose-200">
+                      <XCircle className="w-3.5 h-3.5 text-rose-600" /> FAIL (ไม่ผ่าน)
+                    </span>
+                  )}
                 </div>
 
+                {/* Remark */}
                 <div>
-                  <label className="block text-sm font-normal text-slate-700 mb-1.5">หมายเหตุ (Remark)</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1.5">หมายเหตุ (Remark)</label>
                   <textarea
                     value={editRemark}
                     onChange={(e) => setEditRemark(e.target.value)}
                     rows={2}
-                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-base text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-600 transition-all resize-none"
-                    placeholder="เพิ่มเติม..."
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 transition-all resize-none"
+                    placeholder="บันทึกเพิ่มเติม..."
                   />
                 </div>
               </form>
             </div>
 
-            {/* Footer */}
-            <div className="bg-slate-50 px-6 py-4 border-t border-slate-200 flex justify-end gap-3 rounded-b-2xl">
+            {/* Footer — sticky at bottom */}
+            <div className="shrink-0 bg-white border-t border-slate-200 px-5 py-3.5 flex justify-end gap-3 rounded-b-2xl">
               <button
                 type="button"
                 onClick={handleCloseEdit}
-                className="h-9.5 px-4 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-normal text-base rounded-lg shadow-sm transition-all cursor-pointer"
+                className="h-9 px-4 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 font-medium text-sm rounded-lg shadow-sm transition-all cursor-pointer"
               >
                 ยกเลิก
               </button>
               <button
                 type="submit"
                 form="editForm"
-                className="h-9.5 px-6 bg-sky-600 hover:bg-sky-700 text-white font-normal text-base rounded-lg shadow-sm hover:shadow transition-all cursor-pointer"
+                disabled={!editReceiveDate}
+                className="h-9 px-5 bg-sky-600 hover:bg-sky-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-medium text-sm rounded-lg shadow-sm hover:shadow transition-all cursor-pointer"
               >
                 บันทึกการแก้ไข
               </button>
@@ -1192,18 +1239,22 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
                 </div>
               </div>
 
-              <form id="postProdForm" onSubmit={handleSavePostProd} className="space-y-5">
+              <form id="postProdForm" onSubmit={handleSavePostProd} className="space-y-5" noValidate>
                 <div>
                   <label className="block text-sm font-normal text-slate-700 mb-1.5 flex items-center gap-1">
-                    <Calendar className="w-4 h-4 text-emerald-600" /> วันที่บันทึก
+                    <Calendar className="w-4 h-4 text-emerald-600" /> วันที่บันทึก <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="date"
                     value={postProdDate}
                     onChange={(e) => setPostProdDate(e.target.value)}
-                    required
-                    className="w-full h-10 px-3 bg-white border border-slate-300 rounded-lg text-base font-normal text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all"
+                    className={`w-full h-10 px-3 bg-white border rounded-lg text-base font-normal text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all ${
+                      !postProdDate ? 'border-rose-400 bg-rose-50' : 'border-slate-300'
+                    }`}
                   />
+                  {!postProdDate && (
+                    <p className="text-xs text-rose-500 mt-1">กรุณาเลือกวันที่บันทึก</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-normal text-slate-700 mb-1.5 flex items-center gap-1">

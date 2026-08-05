@@ -118,11 +118,12 @@ function getPurchasingInitialData(forceRefresh) {
     try {
       const rawSuppliers = getSheetDataAsObjects(ss, 'DB_Suppliers') || [];
       suppliers = rawSuppliers.map((s) => {
+        let codeStr = s.code != null ? String(s.code).trim() : '';
         let p = s.phone != null ? String(s.phone).trim() : '';
         if (p && /^[1-9]/.test(p)) {
           p = '0' + p;
         }
-        return { ...s, phone: p };
+        return { ...s, code: codeStr, phone: p };
       });
     } catch (e) {
       errors.push('Suppliers: ' + e.toString());
@@ -192,18 +193,26 @@ function getPurchasingInitialData(forceRefresh) {
     // --- Receiving Records ---
     try {
       const receivingRecords = getSheetDataAsObjects(ss, 'DB_ReceivingRecords') || [];
-      formattedReceiving = receivingRecords.map((r) => ({
-        ...r,
-        receiveQty: Number(r.receiveQty),
-        sampleQty: Number(r.sampleQty),
-        defectQty: Number(r.defectQty),
-        defectPercent: Number(r.defectPercent),
-        isPass: String(r.isPass).toLowerCase() === 'true' || r.isPass === true,
-        hasIssueLog: String(r.hasIssueLog).toLowerCase() === 'true' || r.hasIssueLog === true,
-        postProductionDefectQty: r.postProductionDefectQty !== undefined && r.postProductionDefectQty !== '' ? Number(r.postProductionDefectQty) : undefined,
-        postProductionRemark: r.postProductionRemark || '',
-        postProductionDate: r.postProductionDate || '',
-      }));
+      const seenIds = new Set();
+      formattedReceiving = [];
+      receivingRecords.forEach((r) => {
+        const recId = String(r.id || '').trim();
+        if (recId && !seenIds.has(recId)) {
+          seenIds.add(recId);
+          formattedReceiving.push({
+            ...r,
+            receiveQty: Number(r.receiveQty),
+            sampleQty: Number(r.sampleQty),
+            defectQty: Number(r.defectQty),
+            defectPercent: Number(r.defectPercent),
+            isPass: String(r.isPass).toLowerCase() === 'true' || r.isPass === true,
+            hasIssueLog: String(r.hasIssueLog).toLowerCase() === 'true' || r.hasIssueLog === true,
+            postProductionDefectQty: r.postProductionDefectQty !== undefined && r.postProductionDefectQty !== '' ? Number(r.postProductionDefectQty) : undefined,
+            postProductionRemark: r.postProductionRemark || '',
+            postProductionDate: r.postProductionDate || '',
+          });
+        }
+      });
     } catch (e) {
       errors.push('ReceivingRecords: ' + e.toString());
     }
@@ -612,6 +621,7 @@ function saveSupplierRecord(supplier, clientMeta) {
       return { status: 'error', message: 'รหัส Supplier นี้มีในระบบแล้ว กรุณาระบุรหัสใหม่' };
     }
 
+    let suppCode = supplier.code != null ? String(supplier.code).trim() : '';
     let cleanPhone = supplier.phone ? String(supplier.phone).trim() : '';
     if (cleanPhone && /^[1-9]/.test(cleanPhone)) {
       cleanPhone = `0${cleanPhone}`;
@@ -619,7 +629,7 @@ function saveSupplierRecord(supplier, clientMeta) {
 
     const row = [
       supplier.id,
-      supplier.code,
+      suppCode,
       supplier.name,
       cleanPhone,
       supplier.contactPerson || '',
@@ -634,8 +644,11 @@ function saveSupplierRecord(supplier, clientMeta) {
       sheet.appendRow(row);
     }
 
-    // Force phone column to text format so leading zero is preserved
+    // Force Code (Col 2) and Phone (Col 4) columns to text format '@' so leading zeros like '01', '02' are preserved
     const lastRow = rowIndex > 0 ? rowIndex : sheet.getLastRow();
+    if (suppCode) {
+      sheet.getRange(lastRow, 2).setNumberFormat('@').setValue(suppCode);
+    }
     if (cleanPhone) {
       sheet.getRange(lastRow, 4).setNumberFormat('@').setValue(cleanPhone);
     }
@@ -711,9 +724,11 @@ function saveRMRecord(rmItem, clientMeta) {
       return { status: 'error', message: 'รหัส RM นี้มีในระบบแล้ว กรุณาระบุรหัสใหม่' };
     }
 
+    let rmCode = rmItem.code != null ? String(rmItem.code).trim() : '';
+
     const row = [
       rmItem.id,
-      rmItem.code,
+      rmCode,
       rmItem.name,
       rmItem.category,
       rmItem.categoryLabel,
@@ -727,6 +742,12 @@ function saveRMRecord(rmItem, clientMeta) {
       sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
     } else {
       sheet.appendRow(row);
+    }
+
+    // Force Code (Col 2) column to text format '@' so leading zeros are preserved
+    const lastRow = rowIndex > 0 ? rowIndex : sheet.getLastRow();
+    if (rmCode) {
+      sheet.getRange(lastRow, 2).setNumberFormat('@').setValue(rmCode);
     }
 
     SpreadsheetApp.flush();
