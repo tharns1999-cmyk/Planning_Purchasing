@@ -13,7 +13,6 @@ import {
   Calendar,
 } from 'lucide-react';
 
-import { Button } from '@/components/common/Button';
 import { Badge } from '@/components/common/Badge';
 import { LoadingState } from '@/components/common/LoadingState';
 import { ErrorState } from '@/components/common/ErrorState';

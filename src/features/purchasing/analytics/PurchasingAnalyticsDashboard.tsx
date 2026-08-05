@@ -242,7 +242,9 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
     if (granularity === 'DAILY') {
       const p = dateStr.split('-');
       if (p.length !== 3) return dateStr;
-      return `${parseInt(p[2], 10)}/${parseInt(p[1], 10)}`; // DD/MM
+      const day = p[2] ?? '0';
+      const month = p[1] ?? '0';
+      return `${parseInt(day, 10)}/${parseInt(month, 10)}`; // DD/MM
     } else if (granularity === 'WEEKLY') {
       const wk = getISOWeek(d);
       const yr = (d.getFullYear() + 543).toString().slice(-2);

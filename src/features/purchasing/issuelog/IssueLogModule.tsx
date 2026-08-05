@@ -1,7 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import {
   AlertOctagon,
-  Plus,
   Search,
   CheckCircle2,
   AlertTriangle,
