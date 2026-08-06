@@ -50,6 +50,7 @@ export interface ReceivingRecord {
   defectQty: number;
   defectPercent: number;
   isPass: boolean;
+  unitPrice?: number;
   remark?: string;
   createdAt: string;
   hasIssueLog?: boolean;
@@ -256,6 +257,7 @@ export const MOCK_ANALYTICS_RECEIVING_RECORDS: ReceivingRecord[] = [
     defectQty: 1.5,
     defectPercent: 25,
     isPass: false,
+    unitPrice: 20,
     remark: 'พบสิ่งแปลกปลอมและขี้หนู',
     createdAt: '2026-07-28T09:00:00Z',
     hasIssueLog: true,
@@ -274,6 +276,7 @@ export const MOCK_ANALYTICS_RECEIVING_RECORDS: ReceivingRecord[] = [
     defectQty: 1.2,
     defectPercent: 20,
     isPass: false,
+    unitPrice: 22,
     remark: 'พบแมลงและใบช้ำเกินเกณฑ์',
     createdAt: '2026-07-25T10:15:00Z',
     hasIssueLog: true,
@@ -292,6 +295,7 @@ export const MOCK_ANALYTICS_RECEIVING_RECORDS: ReceivingRecord[] = [
     defectQty: 1.0,
     defectPercent: 5,
     isPass: true,
+    unitPrice: 35,
     remark: 'คุณภาพสมบูรณ์',
     createdAt: '2026-07-22T08:30:00Z',
   },
@@ -309,6 +313,7 @@ export const MOCK_ANALYTICS_RECEIVING_RECORDS: ReceivingRecord[] = [
     defectQty: 2.0,
     defectPercent: 10,
     isPass: true,
+    unitPrice: 40,
     remark: 'เนื้อมะพร้าวนุ่ม ตรงตาม Spec',
     createdAt: '2026-07-18T11:00:00Z',
   },
@@ -326,6 +331,7 @@ export const MOCK_ANALYTICS_RECEIVING_RECORDS: ReceivingRecord[] = [
     defectQty: 0.8,
     defectPercent: 20,
     isPass: true,
+    unitPrice: 50,
     remark: 'ใบสด ไม่มีแมลง',
     createdAt: '2026-07-14T09:45:00Z',
   },
@@ -343,6 +349,7 @@ export const MOCK_ANALYTICS_RECEIVING_RECORDS: ReceivingRecord[] = [
     defectQty: 1.5,
     defectPercent: 11.54,
     isPass: true,
+    unitPrice: 65,
     remark: 'ปลาสด นวดเย็นเรียบร้อย',
     createdAt: '2026-07-10T07:15:00Z',
   },
@@ -361,6 +368,7 @@ export const MOCK_ANALYTICS_RECEIVING_RECORDS: ReceivingRecord[] = [
     defectQty: 1.8,
     defectPercent: 30,
     isPass: false,
+    unitPrice: 19,
     remark: 'พบคราบดินและขี้หนู',
     createdAt: '2026-06-29T10:00:00Z',
     hasIssueLog: true,
@@ -379,6 +387,7 @@ export const MOCK_ANALYTICS_RECEIVING_RECORDS: ReceivingRecord[] = [
     defectQty: 1.5,
     defectPercent: 7.5,
     isPass: true,
+    unitPrice: 33,
     remark: 'ผ่านเกณฑ์มาตรฐาน',
     createdAt: '2026-06-20T09:30:00Z',
   },
@@ -396,6 +405,7 @@ export const MOCK_ANALYTICS_RECEIVING_RECORDS: ReceivingRecord[] = [
     defectQty: 1.5,
     defectPercent: 30,
     isPass: false,
+    unitPrice: 42,
     remark: 'พบเนื้อมะพร้าวแก่เกินไป 1.5 kg',
     createdAt: '2026-06-15T11:20:00Z',
     hasIssueLog: true,
@@ -415,6 +425,7 @@ export const MOCK_ANALYTICS_RECEIVING_RECORDS: ReceivingRecord[] = [
     defectQty: 0.5,
     defectPercent: 12.5,
     isPass: true,
+    unitPrice: 45,
     remark: 'ใบสดสวยงาม',
     createdAt: '2026-05-24T08:40:00Z',
   },
@@ -432,6 +443,7 @@ export const MOCK_ANALYTICS_RECEIVING_RECORDS: ReceivingRecord[] = [
     defectQty: 3.0,
     defectPercent: 23.08,
     isPass: false,
+    unitPrice: 62,
     remark: 'ปลาทูมีกลิ่นอับ น้ำแข็งละลายหมด',
     createdAt: '2026-05-18T07:50:00Z',
     hasIssueLog: true,
@@ -451,6 +463,7 @@ export const MOCK_ANALYTICS_RECEIVING_RECORDS: ReceivingRecord[] = [
     defectQty: 1.0,
     defectPercent: 5,
     isPass: true,
+    unitPrice: 38,
     remark: 'สินค้าได้ Spec ดีเยี่ยม',
     createdAt: '2026-04-12T09:10:00Z',
   },

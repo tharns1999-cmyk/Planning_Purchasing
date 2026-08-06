@@ -145,7 +145,7 @@ function setupPurchasingDatabase() {
     'id', 'billNo', 'receiveDate', 'supplierId', 'supplierName',
     'rmId', 'rmName', 'rmCategory', 'receiveQty', 'sampleQty',
     'defectQty', 'defectPercent', 'isPass', 'remark', 'createdAt', 'hasIssueLog',
-    'postProductionDefectQty', 'postProductionRemark', 'postProductionDate'
+    'postProductionDefectQty', 'postProductionRemark', 'postProductionDate', 'unitPrice'
   ];
   setupPurchasingSheetHeaders(recSheet, recHeaders, '#059669');
 

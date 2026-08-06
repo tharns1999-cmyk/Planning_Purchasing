@@ -69,6 +69,7 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
   );
   const [receiveQty, setReceiveQty] = useState<string>('');
   const [defectQty, setDefectQty] = useState<string>('');
+  const [unitPrice, setUnitPrice] = useState<string>('');
   const [remark, setRemark] = useState<string>('');
 
   // Pending Items State (Batch Receiving)
@@ -87,6 +88,7 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
   const [editReceiveDate, setEditReceiveDate] = useState<string>('');
   const [editReceiveQty, setEditReceiveQty] = useState<string>('');
   const [editDefectQty, setEditDefectQty] = useState<string>('');
+  const [editUnitPrice, setEditUnitPrice] = useState<string>('');
   const [editRemark, setEditRemark] = useState<string>('');
 
   // Delete Modal State
@@ -141,6 +143,7 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
   // Live Auto-Calculate Defect Matrix Result
   const numReceiveQty = parseFloat(receiveQty) || 0;
   const numDefectQty = parseFloat(defectQty) || 0;
+  const numUnitPrice = parseFloat(unitPrice) || 0;
 
   const hasMatrixRules = useMemo(() => {
     if (!selectedRM) return true;
@@ -192,6 +195,7 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
       defectQty: numDefectQty,
       defectPercent: evaluationResult.defectPercent,
       isPass: evaluationResult.isPass,
+      unitPrice: unitPrice.trim() ? numUnitPrice : undefined,
       remark: remark.trim(),
       createdAt: new Date().toISOString(),
       hasIssueLog: false,
@@ -203,6 +207,7 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
     setSelectedRmId('');
     setReceiveQty('');
     setDefectQty('');
+    setUnitPrice('');
     setRemark('');
   };
 
@@ -226,6 +231,7 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
     setSelectedSupplierId('');
     setReceiveQty('');
     setDefectQty('');
+    setUnitPrice('');
     setRemark('');
   };
 
@@ -239,6 +245,7 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
     setEditReceiveDate(normalizedDate);
     setEditReceiveQty(String(record.receiveQty ?? ''));
     setEditDefectQty(String(record.defectQty ?? '0'));
+    setEditUnitPrice(record.unitPrice !== undefined ? String(record.unitPrice) : '');
     setEditRemark(String(record.remark || ''));
     setIsEditModalOpen(true);
   };
@@ -290,6 +297,7 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
       defectQty: parseFloat(String(editDefectQty)) || 0,
       defectPercent: editEvaluationResult.defectPercent,
       isPass: editEvaluationResult.isPass,
+      unitPrice: String(editUnitPrice || '').trim() ? parseFloat(String(editUnitPrice)) || 0 : undefined,
       remark: String(editRemark || '').trim(),
     };
 
@@ -509,17 +517,19 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
                 </div>
 
                 {/* Add Item Form (Detail) */}
-                <form onSubmit={handleAddPendingItem} className="pt-2 border-t border-slate-100">
-                  <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                    เพิ่มรายการวัตถุดิบ (Add Item)
-                  </h3>
+                <form onSubmit={handleAddPendingItem} className="pt-5 border-t border-slate-100">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"></div>
+                    <h3 className="text-sm font-semibold text-slate-800">
+                      เพิ่มรายการวัตถุดิบ (Add Item)
+                    </h3>
+                  </div>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                  <div className="flex flex-col md:flex-row flex-wrap xl:flex-nowrap items-stretch md:items-end gap-x-4 gap-y-5 mb-5">
                     {/* RM (Filtered) */}
-                    <div className="relative md:col-span-1">
-                      <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                        <span className="text-xs">🥬</span>
+                    <div className="relative flex-1 min-w-[240px]">
+                      <label className="block text-[13px] font-medium text-slate-700 mb-1.5 flex items-center gap-1.5">
+                        <span className="text-sm">🥬</span>
                         วัตถุดิบ (RM) <span className="text-rose-500">*</span>
                       </label>
                       <AutocompleteSelect
@@ -544,8 +554,8 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
                     </div>
 
                     {/* Receive Qty */}
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                    <div className="w-full md:w-[120px] shrink-0">
+                      <label className="block text-[13px] font-medium text-slate-700 mb-1.5 flex items-center gap-1.5">
                         <Scale className="w-3.5 h-3.5 text-emerald-600" />
                         รับเข้า (kg) <span className="text-rose-500">*</span>
                       </label>
@@ -557,13 +567,13 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
                         onChange={(e) => setReceiveQty(e.target.value)}
                         placeholder="เช่น 200"
                         required
-                        className="w-full h-10 px-3.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-medium text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all placeholder:text-slate-400"
+                        className="w-full h-[38px] px-3 bg-slate-50 border border-slate-300 rounded-lg text-sm font-medium text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 transition-all placeholder:text-slate-400 placeholder:font-normal"
                       />
                     </div>
 
                     {/* Defect Qty */}
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                    <div className="w-full md:w-[120px] shrink-0">
+                      <label className="block text-[13px] font-medium text-slate-700 mb-1.5 flex items-center gap-1.5">
                         <Percent className="w-3.5 h-3.5 text-rose-600" />
                         Defect (kg) <span className="text-rose-500">*</span>
                       </label>
@@ -576,31 +586,48 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
                         placeholder="เช่น 1.5"
                         required={selectedRM?.category !== 'Type 3'}
                         disabled={selectedRM?.category === 'Type 3'}
-                        className={`w-full h-10 px-3.5 border rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all ${
+                        className={`w-full h-[38px] px-3 border rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 transition-all placeholder:font-normal ${
                           selectedRM?.category === 'Type 3'
                             ? 'bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed'
-                            : 'bg-slate-50 border-slate-300 text-slate-900 focus:bg-white'
+                            : 'bg-slate-50 border-slate-300 text-slate-900 focus:bg-white placeholder:text-slate-400'
                         }`}
                       />
                     </div>
 
+                    {/* Unit Price */}
+                    <div className="w-full md:w-[130px] shrink-0">
+                      <label className="block text-[13px] font-medium text-slate-700 mb-1.5 flex items-center gap-1.5">
+                        <span className="text-slate-400 font-bold">฿</span>
+                        ราคา/หน่วย
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={unitPrice}
+                        onChange={(e) => setUnitPrice(e.target.value)}
+                        placeholder="ไม่บังคับ"
+                        className="w-full h-[38px] px-3 bg-slate-50 border border-slate-300 rounded-lg text-sm font-medium text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 transition-all placeholder:text-slate-400 placeholder:font-normal"
+                      />
+                    </div>
+
                     {/* Remark & Add Button */}
-                    <div className="flex flex-col justify-end">
-                       <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                    <div className="flex-1 min-w-[280px] shrink-0">
+                       <label className="block text-[13px] font-medium text-slate-700 mb-1.5 flex items-center">
                         หมายเหตุ
                       </label>
-                      <div className="flex gap-2">
+                      <div className="flex items-center gap-2">
                         <input
                           type="text"
                           value={remark}
                           onChange={(e) => setRemark(e.target.value)}
-                          placeholder="หมายเหตุ (ถ้ามี)"
-                          className="w-full h-10 px-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 focus:bg-white focus:outline-none focus:border-slate-400 placeholder:text-slate-400"
+                          placeholder="รายละเอียดเพิ่มเติม (ถ้ามี)"
+                          className="flex-1 h-[38px] px-3 bg-slate-50 border border-slate-300 rounded-lg text-sm text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 transition-all placeholder:text-slate-400 placeholder:font-normal"
                         />
                         <button
                           type="submit"
                           disabled={!hasMatrixRules || !selectedSupplierId || !billNo || !receiveQty}
-                          className="h-10 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 shrink-0"
+                          className="h-[38px] px-4 bg-[#0284C7] hover:bg-[#0369A1] text-white font-medium text-sm rounded-lg shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 shrink-0"
                         >
                           <Plus className="w-4 h-4 stroke-[2.5]" />
                           <span>เพิ่มรายการ</span>
@@ -716,6 +743,12 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
                                   <span className={item.isPass ? '' : 'text-rose-600 font-medium'}>
                                     Defect: <strong>{item.defectQty} kg ({item.defectPercent}%)</strong>
                                   </span>
+                                  {item.unitPrice !== undefined && (
+                                    <>
+                                      <span className="w-1 h-1 bg-slate-300 rounded-full hidden sm:block"></span>
+                                      <span>ราคา: <strong className="text-emerald-700">{item.unitPrice.toLocaleString()} ฿/kg</strong> (รวม {(item.receiveQty * item.unitPrice).toLocaleString()} ฿)</span>
+                                    </>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -843,6 +876,8 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
                 <th className="py-3 px-4">Supplier</th>
                 <th className="py-3 px-4">วัตถุดิบ (RM)</th>
                 <th className="py-3 px-4 text-right">รับเข้า</th>
+                <th className="py-3 px-4 text-right">ราคา/หน่วย</th>
+                <th className="py-3 px-4 text-right">มูลค่ารวม</th>
                 <th className="py-3 px-4 text-right">สุ่มตรวจ</th>
                 <th className="py-3 px-4 text-right">Defect</th>
                 <th className="py-3 px-4 text-right">% Defect</th>
@@ -854,7 +889,7 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
             <tbody className="divide-y divide-slate-200 text-sm font-normal text-slate-800">
               {filteredHistory.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="py-12 text-center text-slate-400">
+                  <td colSpan={13} className="py-12 text-center text-slate-400">
                     <Filter className="w-8 h-8 mx-auto mb-2 opacity-30" />
                     <p className="font-normal text-slate-500">ไม่พบประวัติการรับเข้าวัตถุดิบ</p>
                     <p className="text-sm mt-0.5">กรอกฟอร์มด้านบนเพื่อเริ่มบันทึกรายการ</p>
@@ -882,6 +917,12 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
                     </td>
                     <td className="py-3 px-4 whitespace-nowrap text-right font-normal text-slate-900">
                       {rec.receiveQty.toLocaleString()}
+                    </td>
+                    <td className="py-3 px-4 whitespace-nowrap text-right font-normal text-slate-700">
+                      {rec.unitPrice !== undefined ? `${rec.unitPrice.toLocaleString()} ฿` : '-'}
+                    </td>
+                    <td className="py-3 px-4 whitespace-nowrap text-right font-normal text-emerald-700">
+                      {rec.unitPrice !== undefined ? `${(rec.receiveQty * rec.unitPrice).toLocaleString()} ฿` : '-'}
                     </td>
                     <td className="py-3 px-4 whitespace-nowrap text-right font-normal text-blue-700">
                       {rec.sampleQty}
@@ -1072,8 +1113,8 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
                   </div>
                 </div>
 
-                {/* Receive Qty + Defect Qty */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-slate-100">
+                {/* Receive Qty + Unit Price + Defect Qty */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-slate-100">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1.5 flex items-center gap-1">
                       <Scale className="w-3.5 h-3.5 text-slate-400" /> รับเข้า (kg) <span className="text-rose-500">*</span>
@@ -1084,6 +1125,20 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
                       min="0.01"
                       value={editReceiveQty}
                       onChange={(e) => setEditReceiveQty(e.target.value)}
+                      className="w-full h-9 px-3 bg-white border border-slate-300 rounded-lg text-sm font-normal text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5 flex items-center gap-1">
+                      <span className="text-slate-400 font-bold">฿</span> ราคา/หน่วย
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={editUnitPrice}
+                      onChange={(e) => setEditUnitPrice(e.target.value)}
+                      placeholder="ไม่บังคับ"
                       className="w-full h-9 px-3 bg-white border border-slate-300 rounded-lg text-sm font-normal text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 transition-all"
                     />
                   </div>

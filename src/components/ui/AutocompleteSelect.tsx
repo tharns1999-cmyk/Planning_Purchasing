@@ -88,14 +88,13 @@ export const AutocompleteSelect: React.FC<AutocompleteSelectProps> = ({
         />
       )}
 
-      {/* Trigger Button */}
       <button
         type="button"
         disabled={disabled}
         onClick={() => !disabled && setIsOpen(!isOpen)}
-        className={`w-full h-11 px-3.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 transition-all flex items-center justify-between gap-2 cursor-pointer ${
+        className={`w-full h-[38px] px-3 bg-slate-50 border border-slate-300 rounded-lg text-[13px] font-medium text-slate-900 focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 transition-all flex items-center justify-between gap-2 cursor-pointer ${
           disabled ? 'opacity-60 cursor-not-allowed bg-slate-100' : ''
-        } ${isOpen ? 'ring-2 ring-emerald-500/20 border-emerald-600 bg-white shadow-sm' : ''}`}
+        } ${isOpen ? 'ring-2 ring-sky-500/30 border-sky-500 bg-white shadow-sm' : ''}`}
       >
         <div className="flex items-center gap-2 overflow-hidden text-left">
           {icon}

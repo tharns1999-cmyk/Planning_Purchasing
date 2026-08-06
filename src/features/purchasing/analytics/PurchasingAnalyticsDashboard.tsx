@@ -194,6 +194,12 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
     () => globalFilteredReceivingRecords.reduce((sum, r) => sum + r.receiveQty, 0),
     [globalFilteredReceivingRecords]
   );
+  
+  const totalSpend = useMemo(
+    () => globalFilteredReceivingRecords.reduce((sum, r) => sum + (r.unitPrice ? r.receiveQty * r.unitPrice : 0), 0),
+    [globalFilteredReceivingRecords]
+  );
+
   const totalBills = globalFilteredReceivingRecords.length;
 
   const passCount = useMemo(
@@ -263,7 +269,7 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
 
     const timeMap: Record<
       string,
-      { label: string; totalBills: number; passBills: number; totalKg: number; postProdKg: number; sortKey: number }
+      { label: string; totalBills: number; passBills: number; totalKg: number; postProdKg: number; totalSpend: number; sortKey: number }
     > = {};
 
     globalFilteredReceivingRecords.forEach((rec) => {
@@ -282,13 +288,14 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
       const label = getTimeLabel(rec.receiveDate, trendGranularity) || 'ไม่ระบุ';
 
       if (!timeMap[label]) {
-        timeMap[label] = { label, totalBills: 0, passBills: 0, totalKg: 0, postProdKg: 0, sortKey };
+        timeMap[label] = { label, totalBills: 0, passBills: 0, totalKg: 0, postProdKg: 0, totalSpend: 0, sortKey };
       }
       const entry = timeMap[label]!;
       entry.totalBills += 1;
       if (rec.isPass) entry.passBills += 1;
       entry.totalKg += rec.receiveQty || 0;
       entry.postProdKg += rec.postProductionDefectQty || 0;
+      entry.totalSpend += rec.unitPrice ? rec.receiveQty * rec.unitPrice : 0;
     });
 
     return Object.values(timeMap)
@@ -303,6 +310,7 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
           defectRate,
           postProdDefectRate,
           totalKg: m.totalKg,
+          totalSpend: m.totalSpend,
         };
       });
   }, [globalFilteredReceivingRecords, trendGranularity]);
@@ -414,6 +422,62 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
       .slice(0, 10);
   }, [globalFilteredReceivingRecords]);
 
+  // D. Average Price Summary (RM × Supplier)
+  const averagePriceSummaryData = useMemo(() => {
+    if (globalFilteredReceivingRecords.length === 0) return [];
+    
+    // key: rmName_supplierName
+    const priceMap: Record<string, { rmName: string; rmCategory: string; supplierName: string; totalQty: number; totalSpend: number; minPrice: number; maxPrice: number; buyCount: number }> = {};
+    
+    globalFilteredReceivingRecords.forEach(r => {
+      if (r.unitPrice !== undefined) {
+        const key = `${r.rmName}_${r.supplierName}`;
+        if (!priceMap[key]) {
+          priceMap[key] = {
+            rmName: r.rmName,
+            rmCategory: r.rmCategory,
+            supplierName: r.supplierName,
+            totalQty: 0,
+            totalSpend: 0,
+            minPrice: r.unitPrice,
+            maxPrice: r.unitPrice,
+            buyCount: 0
+          };
+        }
+        const entry = priceMap[key];
+        entry.totalQty += r.receiveQty;
+        entry.totalSpend += (r.receiveQty * r.unitPrice);
+        entry.buyCount += 1;
+        if (r.unitPrice < entry.minPrice) entry.minPrice = r.unitPrice;
+        if (r.unitPrice > entry.maxPrice) entry.maxPrice = r.unitPrice;
+      }
+    });
+
+    return Object.values(priceMap).map(item => ({
+      ...item,
+      avgPrice: item.totalQty > 0 ? item.totalSpend / item.totalQty : 0
+    })).sort((a, b) => b.totalSpend - a.totalSpend);
+  }, [globalFilteredReceivingRecords]);
+
+  // E. Supplier Price Comparison Data (for BarChart)
+  const supplierPriceComparisonData = useMemo(() => {
+    const rmGroups: Record<string, any> = {};
+    const suppliersSet = new Set<string>();
+
+    averagePriceSummaryData.forEach(item => {
+      if (!rmGroups[item.rmName]) {
+        rmGroups[item.rmName] = { rmName: item.rmName };
+      }
+      rmGroups[item.rmName][item.supplierName] = Number(item.avgPrice.toFixed(2));
+      suppliersSet.add(item.supplierName);
+    });
+
+    return {
+      data: Object.values(rmGroups).sort((a, b) => a.rmName.localeCompare(b.rmName)),
+      suppliers: Array.from(suppliersSet)
+    };
+  }, [averagePriceSummaryData]);
+
   // -------------------------------------------------------------
   // 3. Filtered Data Table & Export
   // -------------------------------------------------------------
@@ -454,6 +518,8 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
       'RM Name': r.rmName,
       'Category': r.rmCategory,
       'Receive Qty (kg)': r.receiveQty,
+      'Unit Price (THB)': r.unitPrice || '',
+      'Total Value (THB)': r.unitPrice ? (r.receiveQty * r.unitPrice) : '',
       'Sample Qty (kg)': r.sampleQty,
       'Defect Qty (kg)': r.defectQty,
       'Defect Percent (%)': r.defectPercent,
@@ -482,12 +548,12 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
       {/* ------------------------------------------------------------- */}
       {/* UNIFIED ANALYTICS FILTER & TIME RANGE TOOLBAR CARD */}
       {/* ------------------------------------------------------------- */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-4 sm:p-5 space-y-4">
-        {/* Row 1: Date Range Presets & Pickers */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 uppercase tracking-wider">
-            <span className="text-xs">📅</span>
-            <span>ช่วงเวลาข้อมูล (Date Range):</span>
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 space-y-4">
+        {/* Header: Title & Presets */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-[13px] font-semibold text-slate-800">
+            <span className="text-sm">🔍</span>
+            <span>ค้นหาและตัวกรองข้อมูล (Data Filters)</span>
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
@@ -539,35 +605,12 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
               </button>
             </div>
 
-            {/* Custom Date Pickers */}
-            <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200 text-xs">
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => {
-                  setStartDate(e.target.value);
-                  setActiveDatePreset('ALL');
-                }}
-                className="h-7 px-1.5 bg-white border border-slate-200 rounded-lg font-medium text-slate-800 focus:outline-none focus:border-sky-500"
-              />
-              <span className="text-slate-400">ถึง</span>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => {
-                  setEndDate(e.target.value);
-                  setActiveDatePreset('ALL');
-                }}
-                className="h-7 px-1.5 bg-white border border-slate-200 rounded-lg font-medium text-slate-800 focus:outline-none focus:border-sky-500"
-              />
-            </div>
-
             {/* Reset Filters (if active) */}
             {isAnyFilterActive && (
               <button
                 type="button"
                 onClick={handleResetFilters}
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/60 text-xs font-medium transition-all cursor-pointer"
+                className="inline-flex items-center justify-center gap-1.5 h-[32px] px-3 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/60 text-xs font-medium transition-all cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
                 <span>ล้างตัวกรอง</span>
@@ -576,11 +619,39 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
           </div>
         </div>
 
-        {/* Row 2: Dimensional Filters Grid */}
-        <div className="pt-3 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        {/* Filters Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 items-end">
+          {/* Custom Date Pickers (Takes 2 cols on lg) */}
+          <div className="lg:col-span-2">
+            <label className="block text-[13px] font-medium text-slate-700 mb-1.5">
+              ช่วงเวลาข้อมูล (Date Range)
+            </label>
+            <div className="flex items-center gap-2 bg-slate-50/50 p-1 rounded-xl border border-slate-200 text-sm h-[38px] w-full">
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => {
+                  setStartDate(e.target.value);
+                  setActiveDatePreset('ALL');
+                }}
+                className="flex-1 h-[30px] px-2 bg-white border border-slate-200 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 w-full min-w-0"
+              />
+              <span className="text-slate-400 text-[13px] font-medium shrink-0">ถึง</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => {
+                  setEndDate(e.target.value);
+                  setActiveDatePreset('ALL');
+                }}
+                className="flex-1 h-[30px] px-2 bg-white border border-slate-200 rounded-lg font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 w-full min-w-0"
+              />
+            </div>
+          </div>
+
           {/* Supplier Filter */}
           <div>
-            <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+            <label className="block text-[13px] font-medium text-slate-700 mb-1.5">
               ผู้ส่งมอบ (Supplier)
             </label>
             <AutocompleteSelect
@@ -594,7 +665,7 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
 
           {/* RM Filter */}
           <div>
-            <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+            <label className="block text-[13px] font-medium text-slate-700 mb-1.5">
               วัตถุดิบ (RM)
             </label>
             <AutocompleteSelect
@@ -608,7 +679,7 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
 
           {/* Category Filter */}
           <div>
-            <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+            <label className="block text-[13px] font-medium text-slate-700 mb-1.5">
               หมวดหมู่ RM (Category)
             </label>
             <AutocompleteSelect
@@ -621,7 +692,7 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
 
           {/* Status Filter */}
           <div>
-            <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1">
+            <label className="block text-[13px] font-medium text-slate-700 mb-1.5">
               ผลการตรวจ (Status)
             </label>
             <AutocompleteSelect
@@ -639,50 +710,69 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
         variants={containerVariants}
         initial="hidden"
         animate="show"
-        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5"
+        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5"
       >
-        {/* Total Volume */}
-        <motion.div variants={itemVariants} className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex items-center justify-between">
+        {/* Total Spend */}
+        <motion.div variants={itemVariants} className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-sm font-normal text-slate-500 uppercase tracking-wider">
+            <p className="text-[13px] font-medium text-slate-500">
+              มูลค่าการซื้อรวม (Total Spend)
+            </p>
+            <h3 className="text-2xl font-semibold text-slate-900 mt-1">
+              {totalSpend.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}{' '}
+              <span className="text-sm text-slate-500 font-normal">บาท</span>
+            </h3>
+            <p className="text-xs text-slate-500 mt-1.5 flex items-center gap-1">
+              เฉพาะรายการที่ระบุราคา
+            </p>
+          </div>
+          <div className="p-3 rounded-xl bg-sky-50 text-sky-600 border border-sky-100/50">
+            <span className="text-xl">💰</span>
+          </div>
+        </motion.div>
+
+        {/* Total Volume */}
+        <motion.div variants={itemVariants} className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center justify-between">
+          <div>
+            <p className="text-[13px] font-medium text-slate-500">
               ปริมาณรับเข้ารวม (Total Volume)
             </p>
-            <h3 className="text-3xl font-normal text-slate-900 mt-1">
+            <h3 className="text-2xl font-semibold text-slate-900 mt-1">
               {totalVolumeKg.toLocaleString()}{' '}
               <span className="text-sm text-slate-500 font-normal">kg</span>
             </h3>
-            <p className="text-sm text-slate-500 mt-1">
-              จาก <strong className="text-slate-800">{totalBills}</strong> บิลรับเข้าวัตถุดิบ
+            <p className="text-xs text-slate-500 mt-1.5">
+              จาก <strong className="text-slate-700">{totalBills}</strong> บิลรับเข้าวัตถุดิบ
             </p>
           </div>
-          <div className="p-3.5 rounded-2xl bg-emerald-100 text-emerald-700">
+          <div className="p-3 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100/50">
             <span className="text-xl">⚖️</span>
           </div>
         </motion.div>
 
         {/* Overall Pass Rate */}
-        <motion.div variants={itemVariants} className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex items-center justify-between">
+        <motion.div variants={itemVariants} className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-sm font-normal text-slate-500 uppercase tracking-wider">
+            <p className="text-[13px] font-medium text-slate-500">
               อัตราผ่านการสุ่มตรวจ (Pass Rate)
             </p>
             <h3
-              className={`text-3xl font-normal mt-1 ${
+              className={`text-2xl font-semibold mt-1 ${
                 Number(overallPassRate) >= 90 ? 'text-emerald-600' : 'text-rose-600'
               }`}
             >
               {overallPassRate}%
             </h3>
-            <p className="text-sm text-slate-500 mt-1 flex items-center gap-1">
+            <p className="text-xs text-slate-500 mt-1.5 flex items-center gap-1">
               <span>ผ่าน {passCount} บิล</span> •{' '}
-              <span className="text-rose-600 font-normal">ตก {failCount} บิล</span>
+              <span className="text-rose-600 font-medium">ตก {failCount} บิล</span>
             </p>
           </div>
           <div
-            className={`p-3.5 rounded-2xl ${
+            className={`p-3 rounded-xl border ${
               Number(overallPassRate) >= 90
-                ? 'bg-emerald-100 text-emerald-700'
-                : 'bg-rose-100 text-rose-700'
+                ? 'bg-emerald-50 text-emerald-600 border-emerald-100/50'
+                : 'bg-rose-50 text-rose-600 border-rose-100/50'
             }`}
           >
             <span className="text-xl">📈</span>
@@ -690,38 +780,38 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
         </motion.div>
 
         {/* Post-Production Defect Volume */}
-        <motion.div variants={itemVariants} className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex items-center justify-between">
+        <motion.div variants={itemVariants} className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-sm font-normal text-slate-500 uppercase tracking-wider">
+            <p className="text-[13px] font-medium text-slate-500">
               ปัญหาหลังการผลิต (Post-Prod Defect)
             </p>
-            <h3 className="text-3xl font-normal text-rose-600 mt-1">
+            <h3 className="text-2xl font-semibold text-rose-600 mt-1">
               {totalPostProdDefectKg.toLocaleString()}{' '}
-              <span className="text-sm text-slate-500 font-normal">kg</span>
+              <span className="text-sm text-rose-400 font-normal">kg</span>
             </h3>
-            <p className="text-sm text-slate-500 mt-1">
+            <p className="text-xs text-slate-500 mt-1.5">
               จากวัตถุดิบทั้งหมดรวมถึง Type 3
             </p>
           </div>
-          <div className="p-3.5 rounded-2xl bg-rose-100 text-rose-700">
+          <div className="p-3 rounded-xl bg-rose-50 text-rose-600 border border-rose-100/50">
             <span className="text-xl">🚨</span>
           </div>
         </motion.div>
 
         {/* Active QC Issues */}
-        <motion.div variants={itemVariants} className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex items-center justify-between">
+        <motion.div variants={itemVariants} className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-sm font-normal text-slate-500 uppercase tracking-wider">
-              รายการปัญหาคุณภาพเปิดอยู่ (Active QC Issues)
+            <p className="text-[13px] font-medium text-slate-500">
+              ปัญหาคุณภาพเปิดอยู่ (Active Issues)
             </p>
-            <h3 className="text-3xl font-normal text-amber-600 mt-1">
-              {activeIssuesCount} <span className="text-sm text-slate-500 font-normal">รายการ</span>
+            <h3 className="text-2xl font-semibold text-amber-600 mt-1">
+              {activeIssuesCount} <span className="text-sm text-amber-500 font-normal">รายการ</span>
             </h3>
-            <p className="text-sm text-slate-500 mt-1">
+            <p className="text-xs text-slate-500 mt-1.5">
               ต้องติดตามการดำเนินการแก้ไข
             </p>
           </div>
-          <div className="p-3.5 rounded-2xl bg-amber-100 text-amber-700">
+          <div className="p-3 rounded-xl bg-amber-50 text-amber-600 border border-amber-100/50">
             <span className="text-xl">⚠️</span>
           </div>
         </motion.div>
@@ -731,14 +821,14 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
       {/* 3. Recharts Section (Grid 2 Columns) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Chart 1: Quality Pass Trend (Toggleable) */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs flex flex-col">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm flex flex-col">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
             <div>
-              <h3 className="text-lg font-normal text-slate-900 flex items-center gap-2">
+              <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
                 <span className="text-base">📈</span>
                 1. แนวโน้มเปอร์เซ็นต์การตรวจผ่านคุณภาพ (Quality Pass Rate Trend)
               </h3>
-              <p className="text-sm text-slate-500 mt-0.5">
+              <p className="text-[13px] text-slate-500 mt-1">
                 เปรียบเทียบ % PASS และ % FAIL
               </p>
             </div>
@@ -791,12 +881,12 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
                 <AreaChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorPass" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
+                      <stop offset="5%" stopColor="#059669" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="#059669" stopOpacity={0.0} />
                     </linearGradient>
                     <linearGradient id="colorFail" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#ef4444" stopOpacity={0.4} />
-                      <stop offset="95%" stopColor="#ef4444" stopOpacity={0.0} />
+                      <stop offset="5%" stopColor="#e11d48" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="#e11d48" stopOpacity={0.0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
@@ -808,8 +898,8 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
                     contentStyle={{ backgroundColor: '#0f172a', borderRadius: '12px', color: '#fff', border: 'none' }}
                   />
                   <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                  <Area type="monotone" dataKey="passRate" name="% PASS (ตรวจผ่าน)" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorPass)" />
-                  <Area type="monotone" dataKey="postProdDefectRate" name="% ปัญหาหลังผลิต" stroke="#ef4444" strokeWidth={2} fillOpacity={1} fill="url(#colorFail)" />
+                  <Area type="monotone" dataKey="passRate" name="% PASS (ตรวจผ่าน)" stroke="#059669" strokeWidth={3} fillOpacity={1} fill="url(#colorPass)" />
+                  <Area type="monotone" dataKey="postProdDefectRate" name="% ปัญหาหลังผลิต" stroke="#e11d48" strokeWidth={2} fillOpacity={1} fill="url(#colorFail)" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -817,14 +907,14 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
         </div>
 
         {/* Chart 2: Supplier Defect Ranking (Bar Chart) */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-lg font-normal text-slate-900 flex items-center gap-2">
+              <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
                 <span className="text-base">🥇</span>
                 2. จัดอันดับผู้ส่งมอบที่มีปัญหาคุณภาพสูงสุด (Supplier Defect Ranking)
               </h3>
-              <p className="text-sm text-slate-500 mt-0.5">
+              <p className="text-[13px] text-slate-500 mt-1">
                 เรียงตามเปอร์เซ็นต์อัตราการสุ่มตรวจไม่ผ่าน (Fail Rate %)
               </p>
             </div>
@@ -853,7 +943,7 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
                     ]}
                     contentStyle={{ backgroundColor: '#0f172a', borderRadius: '12px', color: '#fff', border: 'none' }}
                   />
-                  <Bar dataKey="failRate" name="อัตราการไม่ผ่าน (Fail Rate %)" fill="#f43f5e" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="failRate" name="อัตราการไม่ผ่าน (Fail Rate %)" fill="#e11d48" radius={[6, 6, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -861,14 +951,14 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
         </div>
 
         {/* Chart 3: RM Category Breakdown (Donut Pie Chart) */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-lg font-normal text-slate-900 flex items-center gap-2">
+              <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
                 <span className="text-base">📊</span>
                 3. สัดส่วนน้ำหนักของเสียตามหมวดหมู่ (Defect Vol by RM Category)
               </h3>
-              <p className="text-sm text-slate-500 mt-1">
+              <p className="text-[13px] text-slate-500 mt-1">
                 แบ่งตามประเภทวัตถุดิบ (Category)
               </p>
             </div>
@@ -913,14 +1003,14 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
         </div>
 
         {/* Chart 4: Top Defect RM Items (Bar Chart) */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-lg font-normal text-slate-900 flex items-center gap-2">
+              <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
                 <span className="text-base">📦</span>
                 4. วัตถุดิบที่มีของเสียสูงสุด (Top Defect RM Items)
               </h3>
-              <p className="text-sm text-slate-500 mt-0.5">
+              <p className="text-[13px] text-slate-500 mt-1">
                 จัดอันดับจากบิลที่ตกเกณฑ์ และปัญหาหลังการผลิต
               </p>
             </div>
@@ -942,8 +1032,53 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
                     contentStyle={{ backgroundColor: '#0f172a', borderRadius: '12px', color: '#fff', border: 'none' }}
                   />
                   <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                  <Bar dataKey="failCount" name="จำนวนบิลที่ไม่ผ่าน (FAIL)" fill="#f59e0b" radius={[6, 6, 0, 0]} />
-                  <Bar dataKey="postProdKg" name="หลังการผลิต (kg)" fill="#ef4444" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="failCount" name="จำนวนบิลที่ไม่ผ่าน (FAIL)" fill="#d97706" radius={[6, 6, 0, 0]} />
+                  <Bar dataKey="postProdKg" name="หลังการผลิต (kg)" fill="#e11d48" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+
+        {/* Chart 5: Supplier Price Comparison (Bar Chart) */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm lg:col-span-2">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+                <span className="text-base">💸</span>
+                5. เปรียบเทียบราคาต่อหน่วยเฉลี่ยตาม Supplier (Supplier Price Comparison)
+              </h3>
+              <p className="text-[13px] text-slate-500 mt-1">
+                เปรียบเทียบราคาซื้อเฉลี่ยของวัตถุดิบชนิดเดียวกันจากผู้ส่งมอบแต่ละราย (บาท/kg)
+              </p>
+            </div>
+          </div>
+
+          {supplierPriceComparisonData.data.length === 0 ? (
+            <div className="h-64 w-full flex flex-col items-center justify-center bg-slate-50/50 rounded-xl border border-dashed border-slate-200 p-6 text-center">
+              <span className="text-3xl mb-2 opacity-40">💸</span>
+              <p className="text-sm font-normal text-slate-600">ยังไม่มีข้อมูลเปรียบเทียบราคา</p>
+              <p className="text-sm text-slate-400 mt-0.5 max-w-xs">
+                เฉพาะรายการที่มีการระบุราคาต่อหน่วยเท่านั้นที่จะถูกนำมาแสดง
+              </p>
+            </div>
+          ) : (
+            <div className="h-80 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={supplierPriceComparisonData.data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="rmName" tick={{ fontSize: 11, fill: '#64748b' }} />
+                  <YAxis tick={{ fontSize: 11, fill: '#64748b' }} />
+                  <Tooltip
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    formatter={(value: any, name: any) => [`${value} ฿/kg`, name]}
+                    contentStyle={{ backgroundColor: '#0f172a', borderRadius: '12px', color: '#fff', border: 'none' }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
+                  {supplierPriceComparisonData.suppliers.map((supplier, idx) => {
+                    const colors = ['#0284C7', '#0369A1', '#0ea5e9', '#38bdf8', '#7dd3fc', '#bae6fd'];
+                    return <Bar key={supplier} dataKey={supplier} name={supplier} fill={colors[idx % colors.length]} radius={[6, 6, 0, 0]} />;
+                  })}
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -951,15 +1086,67 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
         </div>
       </div>
 
-      {/* 4. Advanced Data Table & Export */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+      {/* 4. Average Price Summary Table */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-slate-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div>
+            <h3 className="text-base font-semibold text-slate-900">
+              4. ตารางสรุปราคาเฉลี่ยต่อ RM × Supplier
+            </h3>
+            <p className="text-[13px] text-slate-500 mt-1">
+              แสดงเฉพาะรายการที่มีการระบุราคา
+            </p>
+          </div>
+        </div>
+        <div className="overflow-x-auto max-h-[400px] overflow-y-auto custom-scrollbar">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200 text-[13px] font-semibold text-slate-500 sticky top-0 z-10 shadow-2xs">
+                <th className="py-3.5 px-4">วัตถุดิบ (RM)</th>
+                <th className="py-3.5 px-4">Supplier</th>
+                <th className="py-3.5 px-4 text-right">ราคาเฉลี่ย (฿/kg)</th>
+                <th className="py-3.5 px-4 text-right">จำนวนครั้งที่ซื้อ</th>
+                <th className="py-3.5 px-4 text-right">ปริมาณรวม (kg)</th>
+                <th className="py-3.5 px-4 text-right">มูลค่ารวม (บาท)</th>
+                <th className="py-3.5 px-4 text-right">ช่วงราคา (ต่ำสุด-สูงสุด)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 text-sm font-normal text-slate-800">
+              {averagePriceSummaryData.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-10 text-center text-slate-400">
+                    ไม่พบข้อมูลประวัติราคา
+                  </td>
+                </tr>
+              ) : (
+                averagePriceSummaryData.map((r, i) => (
+                  <tr key={i} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="py-3 px-4 font-normal text-slate-900">{r.rmName}</td>
+                    <td className="py-3 px-4 font-normal text-slate-800">{r.supplierName}</td>
+                    <td className="py-3 px-4 text-right font-normal text-sky-700">{r.avgPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td className="py-3 px-4 text-right text-slate-600 font-normal">{r.buyCount}</td>
+                    <td className="py-3 px-4 text-right text-slate-600 font-normal">{r.totalQty.toLocaleString()}</td>
+                    <td className="py-3 px-4 text-right font-normal text-emerald-700">{r.totalSpend.toLocaleString()}</td>
+                    <td className="py-3 px-4 text-right font-normal text-slate-500">
+                      {r.minPrice.toLocaleString()} - {r.maxPrice.toLocaleString()}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* 5. Advanced Data Table & Export */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         {/* Controls & Export Header */}
         <div className="p-6 border-b border-slate-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div>
-            <h3 className="text-lg font-normal text-slate-900">
-              ตารางสรุปประวัติ QC & การประเมินผลผู้ส่งมอบ ({filteredRecords.length} รายการ)
+            <h3 className="text-base font-semibold text-slate-900">
+              5. ตารางสรุปประวัติ QC & การประเมินผลผู้ส่งมอบ ({filteredRecords.length} รายการ)
             </h3>
-            <p className="text-sm text-slate-500 mt-0.5">
+            <p className="text-[13px] text-slate-500 mt-1">
               สามารถกรองข้อมูลเพื่อส่งออกเป็นรายงาน CSV สำหรับการประชุมประเมินประจำเดือน
             </p>
           </div>
@@ -993,12 +1180,14 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
         <div className="overflow-x-auto max-h-[500px] overflow-y-auto custom-scrollbar">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-sm font-normal uppercase tracking-wider text-slate-500 sticky top-0 z-10 shadow-2xs">
+              <tr className="bg-slate-50 border-b border-slate-200 text-[13px] font-semibold text-slate-500 sticky top-0 z-10 shadow-2xs">
                 <th className="py-3.5 px-4">วันที่รับ</th>
                 <th className="py-3.5 px-4">Bill No</th>
                 <th className="py-3.5 px-4">Supplier (ผู้ส่งมอบ)</th>
                 <th className="py-3.5 px-4">วัตถุดิบ (RM)</th>
                 <th className="py-3.5 px-4 text-right">รับเข้า (kg)</th>
+                <th className="py-3.5 px-4 text-right">ราคา/หน่วย (บาท)</th>
+                <th className="py-3.5 px-4 text-right">มูลค่ารวม (บาท)</th>
                 <th className="py-3.5 px-4 text-right">สุ่มตรวจ (kg)</th>
                 <th className="py-3.5 px-4 text-right">Defect (kg)</th>
                 <th className="py-3.5 px-4 text-right">% Defect</th>
@@ -1010,7 +1199,7 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
             <tbody className="divide-y divide-slate-200 text-sm font-normal text-slate-800">
               {filteredRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-10 text-center text-slate-400">
+                  <td colSpan={13} className="py-10 text-center text-slate-400">
                     ไม่พบข้อมูลประวัติ QC ตามเงื่อนไขที่เลือก
                   </td>
                 </tr>
@@ -1027,6 +1216,8 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
                       </span>
                     </td>
                     <td className="py-3 px-4 text-right font-normal">{r.receiveQty.toLocaleString()}</td>
+                    <td className="py-3 px-4 text-right font-normal text-sky-700">{r.unitPrice !== undefined ? r.unitPrice.toLocaleString() : '-'}</td>
+                    <td className="py-3 px-4 text-right font-normal text-emerald-700">{r.unitPrice !== undefined ? (r.receiveQty * r.unitPrice).toLocaleString() : '-'}</td>
                     <td className="py-3 px-4 text-right text-blue-700 font-normal">{r.sampleQty}</td>
                     <td className="py-3 px-4 text-right text-rose-700 font-normal">{r.defectQty}</td>
                     <td className="py-3 px-4 text-right font-normal">{r.defectPercent}%</td>

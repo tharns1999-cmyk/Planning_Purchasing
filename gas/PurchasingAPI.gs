@@ -210,6 +210,7 @@ function getPurchasingInitialData(forceRefresh) {
             postProductionDefectQty: r.postProductionDefectQty !== undefined && r.postProductionDefectQty !== '' ? Number(r.postProductionDefectQty) : undefined,
             postProductionRemark: r.postProductionRemark || '',
             postProductionDate: r.postProductionDate || '',
+            unitPrice: r.unitPrice !== undefined && r.unitPrice !== '' ? Number(r.unitPrice) : undefined,
           });
         }
       });
@@ -361,7 +362,8 @@ function saveReceivingRecord(record, clientMeta) {
       record.hasIssueLog || false,
       record.postProductionDefectQty !== undefined ? record.postProductionDefectQty : '',
       record.postProductionRemark || '',
-      record.postProductionDate || ''
+      record.postProductionDate || '',
+      record.unitPrice !== undefined ? record.unitPrice : ''
     ];
 
     if (rowIndex > 0) {
@@ -449,7 +451,8 @@ function saveReceivingRecordsBatch(records, clientMeta) {
         record.hasIssueLog || false,
         record.postProductionDefectQty !== undefined ? record.postProductionDefectQty : '',
         record.postProductionRemark || '',
-        record.postProductionDate || ''
+        record.postProductionDate || '',
+        record.unitPrice !== undefined ? record.unitPrice : ''
       ];
 
       const rowIndex = existingIds.get(String(record.id));
