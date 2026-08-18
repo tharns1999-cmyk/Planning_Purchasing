@@ -36,6 +36,15 @@ export interface EvaluationResult {
   ruleMatched?: DefectRule;
 }
 
+export interface ReceivingAttachmentItem {
+  id: string;
+  name?: string;
+  url: string;
+  driveViewUrl?: string;
+  uploadedAt?: string;
+  sizeBytes?: number;
+}
+
 export interface ReceivingRecord {
   id: string;
   billNo: string;
@@ -57,6 +66,42 @@ export interface ReceivingRecord {
   postProductionDefectQty?: number;
   postProductionRemark?: string;
   postProductionDate?: string;
+  attachments?: (string | ReceivingAttachmentItem)[];
+}
+
+export function normalizeAttachmentItem(item: string | ReceivingAttachmentItem): ReceivingAttachmentItem {
+  if (typeof item === 'string') {
+    const str = item.trim();
+    let fileId = '';
+    const dMatch = str.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (dMatch && dMatch[1]) {
+      fileId = dMatch[1];
+    } else {
+      const idMatch = str.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+      if (idMatch && idMatch[1]) {
+        fileId = idMatch[1];
+      }
+    }
+
+    if (fileId) {
+      return {
+        id: fileId,
+        name: `RM-Attachment-${fileId.slice(0, 6)}.jpg`,
+        url: `https://lh3.googleusercontent.com/d/${fileId}`,
+        driveViewUrl: `https://drive.google.com/file/d/${fileId}/view?usp=drivesdk`,
+        uploadedAt: new Date().toISOString(),
+      };
+    }
+
+    return {
+      id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      name: 'รูปภาพแนบ',
+      url: str,
+      driveViewUrl: str.startsWith('http') ? str : undefined,
+      uploadedAt: new Date().toISOString(),
+    };
+  }
+  return item;
 }
 
 export interface DefectCategoryItem {

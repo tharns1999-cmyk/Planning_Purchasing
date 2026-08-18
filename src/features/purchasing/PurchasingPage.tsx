@@ -5,6 +5,13 @@ import {
   AlertTriangle,
   BarChart3,
   Sliders,
+  Package,
+  RotateCw,
+  Pin,
+  ArrowLeft,
+  Settings,
+  Inbox,
+  BarChart3 as BarChartIcon,
 } from 'lucide-react';
 import { RMReceivingModule } from './receiving/RMReceivingModule';
 import { IssueLogModule, PrefillIssueData } from './issuelog/IssueLogModule';
@@ -61,9 +68,10 @@ class PurchasingErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorB
                 this.setState({ hasError: false, error: null });
                 window.location.reload();
               }}
-              className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-medium transition-all"
+              className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-medium transition-all inline-flex items-center gap-2"
             >
-              🔄 โหลดหน้าเว็บใหม่
+              <RotateCw className="w-4 h-4" />
+              <span>โหลดหน้าเว็บใหม่</span>
             </button>
           </div>
         </div>
@@ -253,6 +261,34 @@ export const PurchasingPage: React.FC = () => {
     PurchasingGasService.deleteRMItem(id);
   };
 
+  const handleMergeRMItems = (targetRM: RMItem, mergedRmIds: string[]) => {
+    // 1. Update RM items state
+    setRmItems((prev) =>
+      prev
+        .filter((r) => !mergedRmIds.includes(r.id) || r.id === targetRM.id)
+        .map((r) => (r.id === targetRM.id ? targetRM : r))
+    );
+
+    // 2. Update Receiving Records state
+    const updatedReceivings = receivingRecords.map((r) =>
+      mergedRmIds.includes(r.rmId)
+        ? { ...r, rmId: targetRM.id, rmName: targetRM.name, rmCategory: targetRM.category }
+        : r
+    );
+    setReceivingRecords(updatedReceivings);
+
+    // 3. Update Issue Logs state
+    const updatedIssues = issueLogs.map((i) =>
+      mergedRmIds.includes(i.rmId)
+        ? { ...i, rmId: targetRM.id, rmName: targetRM.name }
+        : i
+    );
+    setIssueLogs(updatedIssues);
+
+    // 4. Save to GAS / LocalStorage
+    PurchasingGasService.mergeRMItems(targetRM, mergedRmIds, updatedReceivings, updatedIssues);
+  };
+
   const handleUpdateDefectMatrix = (updatedMatrix: Record<string, DefectRule[]>) => {
     setDefectMatrix(updatedMatrix);
     PurchasingGasService.saveDefectMatrix(updatedMatrix);
@@ -288,7 +324,7 @@ export const PurchasingPage: React.FC = () => {
           }`}>
             <div className="flex items-center gap-3 overflow-hidden">
               <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-emerald-400 text-white flex items-center justify-center shadow-md shrink-0 font-bold text-lg">
-                📦
+                <Package className="w-5 h-5 text-white" />
               </div>
               {isExpanded && (
                 <div className="whitespace-nowrap transition-opacity duration-200">
@@ -312,7 +348,7 @@ export const PurchasingPage: React.FC = () => {
                 }`}
                 title={isSidebarPinned ? 'ปลดปักหมุด Sidebar' : 'ปักหมุดตรึง Sidebar'}
               >
-                {isSidebarPinned ? <span className="text-sm">📌</span> : <span className="text-sm opacity-60">📌</span>}
+                <Pin className={`w-4 h-4 ${isSidebarPinned ? 'text-emerald-400' : 'opacity-60'}`} />
               </button>
             )}
           </div>
@@ -340,9 +376,9 @@ export const PurchasingPage: React.FC = () => {
                 />
               )}
               <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 relative z-10 transition-colors ${
-                activeTab === 'receiving' ? 'bg-white/20' : 'bg-slate-800/90 group-hover:bg-slate-700'
+                activeTab === 'receiving' ? 'bg-white/20 text-white' : 'bg-slate-800/90 text-slate-400 group-hover:bg-slate-700 group-hover:text-white'
               }`}>
-                <span className="text-lg">📥</span>
+                <Inbox className="w-5 h-5" />
               </div>
               {isExpanded && (
                 <span className="whitespace-nowrap overflow-hidden transition-all duration-200 relative z-10">
@@ -372,9 +408,9 @@ export const PurchasingPage: React.FC = () => {
                 />
               )}
               <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 relative z-10 transition-colors ${
-                activeTab === 'issuelog' ? 'bg-white/20' : 'bg-slate-800/90 group-hover:bg-slate-700'
+                activeTab === 'issuelog' ? 'bg-white/20 text-white' : 'bg-slate-800/90 text-slate-400 group-hover:bg-slate-700 group-hover:text-white'
               }`}>
-                <span className="text-lg">🚨</span>
+                <AlertTriangle className="w-5 h-5" />
                 {openIssuesCount > 0 && !isExpanded && (
                   <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-rose-500 rounded-full animate-ping" />
                 )}
@@ -412,9 +448,9 @@ export const PurchasingPage: React.FC = () => {
                 />
               )}
               <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 relative z-10 transition-colors ${
-                activeTab === 'analytics' ? 'bg-white/20' : 'bg-slate-800/90 group-hover:bg-slate-700'
+                activeTab === 'analytics' ? 'bg-white/20 text-white' : 'bg-slate-800/90 text-slate-400 group-hover:bg-slate-700 group-hover:text-white'
               }`}>
-                <span className="text-lg">📊</span>
+                <BarChartIcon className="w-5 h-5" />
               </div>
               {isExpanded && (
                 <span className="whitespace-nowrap overflow-hidden transition-all duration-200 relative z-10">
@@ -444,9 +480,9 @@ export const PurchasingPage: React.FC = () => {
                 />
               )}
               <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 relative z-10 transition-colors ${
-                activeTab === 'master' ? 'bg-white/20' : 'bg-slate-800/90 group-hover:bg-slate-700'
+                activeTab === 'master' ? 'bg-white/20 text-white' : 'bg-slate-800/90 text-slate-400 group-hover:bg-slate-700 group-hover:text-white'
               }`}>
-                <span className="text-lg">⚙️</span>
+                <Settings className="w-5 h-5" />
               </div>
               {isExpanded && (
                 <span className="whitespace-nowrap overflow-hidden transition-all duration-200 relative z-10">
@@ -468,7 +504,7 @@ export const PurchasingPage: React.FC = () => {
             title="กลับหน้าหลัก Portal"
           >
             <div className="w-9 h-9 rounded-xl bg-slate-800/90 flex items-center justify-center shrink-0 text-slate-400">
-              <span className="text-lg">🔙</span>
+              <ArrowLeft className="w-4 h-4" />
             </div>
             {isExpanded && (
               <span className="text-xs font-medium whitespace-nowrap">
@@ -501,10 +537,10 @@ export const PurchasingPage: React.FC = () => {
                   ? 'bg-sky-600'
                   : 'bg-purple-600'
               }`}>
-                {activeTab === 'receiving' && '📥'}
-                {activeTab === 'issuelog' && '🚨'}
-                {activeTab === 'analytics' && '📊'}
-                {activeTab === 'master' && '⚙️'}
+                {activeTab === 'receiving' && <Inbox className="w-4 h-4" />}
+                {activeTab === 'issuelog' && <AlertTriangle className="w-4 h-4" />}
+                {activeTab === 'analytics' && <BarChartIcon className="w-4 h-4" />}
+                {activeTab === 'master' && <Settings className="w-4 h-4" />}
               </div>
 
               <div className="overflow-hidden">
@@ -531,7 +567,7 @@ export const PurchasingPage: React.FC = () => {
                 }`}
                 title="โหลดข้อมูลล่าสุด"
               >
-                <span className={`text-xs ${isRefreshing ? 'animate-spin' : ''}`}>🔄</span>
+                <RotateCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
                 <span className="hidden sm:inline">รีเฟรช</span>
               </button>
             </div>
@@ -600,6 +636,9 @@ export const PurchasingPage: React.FC = () => {
                     onAddRMItem={handleAddRMItem}
                     onUpdateRMItem={handleUpdateRMItem}
                     onDeleteRMItem={handleDeleteRMItem}
+                    receivingRecords={receivingRecords}
+                    issueLogs={issueLogs}
+                    onMergeRMItems={handleMergeRMItems}
                     defectMatrix={defectMatrix}
                     onUpdateDefectMatrix={handleUpdateDefectMatrix}
                     defectCategories={defectCategories}

@@ -25,6 +25,7 @@ function onOpen() {
   ui.createMenu('🛒 ระบบจัดซื้อ & QC')
     .addItem('⚙️ ตั้งค่าฐานข้อมูลจัดซื้อ (Setup Purchasing DB)', 'setupPurchasingDatabase')
     .addItem('🔄 ล้างและซิงค์หัวตาราง (Sync Purchasing Headers)', 'syncAndSanitizePurchasingSheets')
+    .addItem('🔓 ยืนยันสิทธิ์ Google Drive (Auth Drive)', 'testDriveAuth')
     .addToUi();
 }
 

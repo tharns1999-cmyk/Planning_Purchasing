@@ -199,6 +199,7 @@ function getPurchasingInitialData(forceRefresh) {
         const recId = String(r.id || '').trim();
         if (recId && !seenIds.has(recId)) {
           seenIds.add(recId);
+          const parsedAttachments = parseAttachmentsFromSheet(r.attachments);
           formattedReceiving.push({
             ...r,
             receiveQty: Number(r.receiveQty),
@@ -211,6 +212,7 @@ function getPurchasingInitialData(forceRefresh) {
             postProductionRemark: r.postProductionRemark || '',
             postProductionDate: r.postProductionDate || '',
             unitPrice: r.unitPrice !== undefined && r.unitPrice !== '' ? Number(r.unitPrice) : undefined,
+            attachments: parsedAttachments,
           });
         }
       });
@@ -363,7 +365,8 @@ function saveReceivingRecord(record, clientMeta) {
       record.postProductionDefectQty !== undefined ? record.postProductionDefectQty : '',
       record.postProductionRemark || '',
       record.postProductionDate || '',
-      record.unitPrice !== undefined ? record.unitPrice : ''
+      record.unitPrice !== undefined ? record.unitPrice : '',
+      formatAttachmentsForSheet(record.id, record.billNo, record.attachments)
     ];
 
     if (rowIndex > 0) {
@@ -384,6 +387,7 @@ function saveReceivingRecord(record, clientMeta) {
       `Sample Qty: ${record.sampleQty} kg`,
       `Defect Qty: ${record.defectQty} kg (${record.defectPercent}%)`,
       `QC Status: ${record.isPass ? 'PASS' : 'FAIL'}`,
+      `Attachments: ${record.attachments ? record.attachments.length : 0} files`,
       `Remark: ${record.remark || '-'}`
     ];
     if (record.postProductionDefectQty !== undefined && record.postProductionDefectQty !== '') {
@@ -452,7 +456,8 @@ function saveReceivingRecordsBatch(records, clientMeta) {
         record.postProductionDefectQty !== undefined ? record.postProductionDefectQty : '',
         record.postProductionRemark || '',
         record.postProductionDate || '',
-        record.unitPrice !== undefined ? record.unitPrice : ''
+        record.unitPrice !== undefined ? record.unitPrice : '',
+        formatAttachmentsForSheet(record.id, record.billNo, record.attachments)
       ];
 
       const rowIndex = existingIds.get(String(record.id));
@@ -1069,3 +1074,247 @@ function logAuditEntry(clientMeta, action, moduleName, recordId, details) {
     Logger.log('logAuditEntry error: ' + err.toString());
   }
 }
+
+// -------------------------------------------------------------
+// GOOGLE DRIVE ATTACHMENTS REPOSITORY
+// -------------------------------------------------------------
+const ATTACHMENT_FOLDER_NAME = 'RM_Receiving_Attachments';
+
+function getOrCreateReceivingAttachmentsFolder() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let parentFolder = DriveApp.getRootFolder();
+    try {
+      const ssFile = DriveApp.getFileById(ss.getId());
+      const parents = ssFile.getParents();
+      if (parents.hasNext()) {
+        parentFolder = parents.next();
+      }
+    } catch (e) {
+      Logger.log('Could not get parent folder of spreadsheet: ' + e.toString());
+    }
+
+    const folders = parentFolder.getFoldersByName(ATTACHMENT_FOLDER_NAME);
+    if (folders.hasNext()) {
+      const folder = folders.next();
+      try {
+        folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      } catch (e2) {}
+      return folder;
+    }
+
+    const newFolder = parentFolder.createFolder(ATTACHMENT_FOLDER_NAME);
+    try {
+      newFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    } catch (e3) {}
+    return newFolder;
+  } catch (err) {
+    Logger.log('getOrCreateReceivingAttachmentsFolder fallback to root: ' + err.toString());
+    const rootFolders = DriveApp.getFoldersByName(ATTACHMENT_FOLDER_NAME);
+    if (rootFolders.hasNext()) return rootFolders.next();
+    return DriveApp.createFolder(ATTACHMENT_FOLDER_NAME);
+  }
+}
+
+/**
+ * Upload an attachment to Google Drive and return Drive URL & Direct view URL
+ */
+function uploadReceivingAttachmentToDrive(recordId, billNo, base64Data, mimeType, fileName) {
+  try {
+    if (!base64Data) {
+      return { status: 'error', message: 'No base64 data provided' };
+    }
+
+    const folder = getOrCreateReceivingAttachmentsFolder();
+    
+    let cleanBase64 = base64Data;
+    let detectedMime = mimeType || 'image/jpeg';
+    
+    if (base64Data.indexOf('data:') === 0) {
+      const parts = base64Data.split(',');
+      const meta = parts[0];
+      cleanBase64 = parts[1];
+      const match = meta.match(/data:(.*?);base64/);
+      if (match && match[1]) {
+        detectedMime = match[1];
+      }
+    }
+
+    const ext = detectedMime === 'image/png' ? 'png' : detectedMime === 'image/webp' ? 'webp' : 'jpg';
+    const cleanBillNo = (billNo || recordId || 'RM').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const timeStampStr = Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyyMMdd-HHmmss');
+    const uniqueSuffix = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+    const finalFileName = fileName || `RM-${cleanBillNo}-${timeStampStr}-${uniqueSuffix}.${ext}`;
+
+    const decodedBytes = Utilities.base64Decode(cleanBase64);
+    const blob = Utilities.newBlob(decodedBytes, detectedMime, finalFileName);
+    const file = folder.createFile(blob);
+
+    try {
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    } catch (shareErr) {
+      Logger.log('Warning: Could not set public sharing on file: ' + shareErr.toString());
+    }
+
+    const fileId = file.getId();
+    const driveViewUrl = 'https://drive.google.com/file/d/' + fileId + '/view?usp=drivesdk';
+    // Direct CDN preview link that works fast in <img> tags
+    const directUrl = 'https://lh3.googleusercontent.com/d/' + fileId;
+
+    const attachmentItem = {
+      id: fileId,
+      name: finalFileName,
+      url: directUrl,
+      driveViewUrl: driveViewUrl,
+      uploadedAt: new Date().toISOString(),
+      sizeBytes: file.getSize()
+    };
+
+    return {
+      status: 'success',
+      data: attachmentItem
+    };
+  } catch (err) {
+    Logger.log('uploadReceivingAttachmentToDrive error: ' + err.toString());
+    return { status: 'error', message: err.toString() };
+  }
+}
+
+/**
+ * Delete an attachment file from Google Drive
+ */
+function deleteReceivingAttachmentFromDrive(fileId) {
+  try {
+    if (!fileId) return { status: 'error', message: 'No fileId provided' };
+    const file = DriveApp.getFileById(fileId);
+    if (file) {
+      file.setTrashed(true);
+    }
+    return { status: 'success', fileId: fileId };
+  } catch (err) {
+    Logger.log('deleteReceivingAttachmentFromDrive error: ' + err.toString());
+    return { status: 'error', message: err.toString() };
+  }
+}
+
+/**
+ * Format attachments for Google Sheet cell:
+ * - If base64, auto-upload to Google Drive and convert to Drive URL
+ * - Returns a clean string of Google Drive URL(s) separated by comma/newline:
+ *   e.g. "https://drive.google.com/file/d/1ABC.../view"
+ */
+function formatAttachmentsForSheet(recordId, billNo, attachments) {
+  if (!attachments || !Array.isArray(attachments) || attachments.length === 0) {
+    return '';
+  }
+
+  const driveUrls = [];
+  let uploadFailed = false;
+
+  for (let i = 0; i < attachments.length; i++) {
+    const item = attachments[i];
+    if (typeof item === 'string') {
+      if (item.indexOf('http') === 0) {
+        driveUrls.push(item);
+      } else if (item.indexOf('data:') === 0) {
+        // Auto-upload Base64 to Google Drive
+        const res = uploadReceivingAttachmentToDrive(recordId, billNo, item, 'image/jpeg');
+        if (res && res.status === 'success' && res.data && res.data.driveViewUrl) {
+          driveUrls.push(res.data.driveViewUrl);
+        } else {
+          uploadFailed = true;
+        }
+      }
+    } else if (typeof item === 'object' && item !== null) {
+      if (item.driveViewUrl) {
+        driveUrls.push(item.driveViewUrl);
+      } else if (item.url && item.url.indexOf('http') === 0) {
+        driveUrls.push(item.url);
+      } else if (item.url && item.url.indexOf('data:') === 0) {
+        // Auto-upload Base64 to Google Drive
+        const res = uploadReceivingAttachmentToDrive(recordId, billNo, item.url, 'image/jpeg', item.name);
+        if (res && res.status === 'success' && res.data && res.data.driveViewUrl) {
+          driveUrls.push(res.data.driveViewUrl);
+        } else {
+          uploadFailed = true;
+        }
+      }
+    }
+  }
+
+  if (uploadFailed) {
+    // If ANY upload fails (usually due to Drive Permission missing), fallback to JSON to prevent data loss
+    return JSON.stringify(attachments);
+  }
+
+  return driveUrls.join(', ');
+}
+
+/**
+ * Parse Google Sheet cell content into Array of ReceivingAttachmentItems
+ */
+function parseAttachmentsFromSheet(rawAttachments) {
+  if (!rawAttachments) return [];
+  
+  if (Array.isArray(rawAttachments)) {
+    return rawAttachments.map(function(item) { return parseSingleAttachment(item); }).filter(Boolean);
+  }
+
+  const rawStr = String(rawAttachments).trim();
+  if (!rawStr) return [];
+
+  // If JSON array
+  if (rawStr.charAt(0) === '[') {
+    try {
+      const parsed = JSON.parse(rawStr);
+      if (Array.isArray(parsed)) {
+        return parsed.map(function(item) { return parseSingleAttachment(item); }).filter(Boolean);
+      }
+    } catch (e) {}
+  }
+
+  // Comma or newline separated Drive URLs
+  const parts = rawStr.split(/[\n,]+/).map(function(s) { return s.trim(); }).filter(Boolean);
+  return parts.map(function(url) { return parseSingleAttachment(url); }).filter(Boolean);
+}
+
+function parseSingleAttachment(item) {
+  if (!item) return null;
+  if (typeof item === 'object' && item.url) {
+    return item;
+  }
+  const str = String(item).trim();
+  if (!str) return null;
+
+  // Extract Drive File ID if it's a Drive URL
+  let fileId = '';
+  const dMatch = str.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  if (dMatch && dMatch[1]) {
+    fileId = dMatch[1];
+  } else {
+    const idMatch = str.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+    if (idMatch && idMatch[1]) {
+      fileId = idMatch[1];
+    }
+  }
+
+  if (fileId) {
+    return {
+      id: fileId,
+      name: 'RM-Attachment-' + fileId.slice(0, 6) + '.jpg',
+      url: 'https://lh3.googleusercontent.com/d/' + fileId,
+      driveViewUrl: 'https://drive.google.com/file/d/' + fileId + '/view?usp=drivesdk',
+      uploadedAt: new Date().toISOString()
+    };
+  }
+
+  // Plain URL or Base64
+  return {
+    id: 'att-' + Date.now(),
+    name: 'รูปภาพแนบ',
+    url: str,
+    driveViewUrl: str.indexOf('http') === 0 ? str : undefined,
+    uploadedAt: new Date().toISOString()
+  };
+}
+

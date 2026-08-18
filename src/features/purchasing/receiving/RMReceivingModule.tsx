@@ -15,12 +15,18 @@ import {
   Trash2,
   Factory,
   ChevronUp,
+  FileText,
+  Leaf,
+  Check,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { TablePagination } from '@/components/ui/TablePagination';
 import { AutocompleteSelect, SelectOption } from '@/components/ui/AutocompleteSelect';
+import { RMReceivingAttachmentModal } from './RMReceivingAttachmentModal';
 import {
   calculateDefectResult,
   ReceivingRecord,
+  ReceivingAttachmentItem,
   RMItem,
   Supplier,
   DefectRule,
@@ -101,6 +107,10 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
   const [postProdDefectQty, setPostProdDefectQty] = useState<string>('');
   const [postProdRemark, setPostProdRemark] = useState<string>('');
   const [postProdDate, setPostProdDate] = useState<string>('');
+
+  // Attachment Modal State
+  const [isAttachmentModalOpen, setIsAttachmentModalOpen] = useState<boolean>(false);
+  const [attachmentRecord, setAttachmentRecord] = useState<ReceivingRecord | null>(null);
 
   // Filtered RMs based on selected Supplier
   const availableRMs = useMemo(() => {
@@ -370,6 +380,26 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
     handleClosePostProd();
   };
 
+  // Attachment Modal Handlers
+  const handleOpenAttachments = (record: ReceivingRecord) => {
+    setAttachmentRecord(record);
+    setIsAttachmentModalOpen(true);
+  };
+
+  const handleCloseAttachments = () => {
+    setIsAttachmentModalOpen(false);
+    setAttachmentRecord(null);
+  };
+
+  const handleSaveAttachments = (recordId: string, newAttachments: ReceivingAttachmentItem[]) => {
+    const target = (receivingRecords || []).find((r) => r.id === recordId);
+    if (target && onUpdateReceivingRecord) {
+      const updated: ReceivingRecord = { ...target, attachments: newAttachments };
+      onUpdateReceivingRecord(updated);
+      setAttachmentRecord(updated);
+    }
+  };
+
   // Derived filtered & paginated data
   const filteredHistory = useMemo(() => {
     const q = (searchQuery || '').toLowerCase();
@@ -414,8 +444,8 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
         {/* Card Header */}
         <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 rounded-t-2xl">
           <div className="flex items-center gap-2.5">
-            <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-100 text-sm">
-              📦
+            <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-100">
+              <PackageCheck className="w-4 h-4" />
             </div>
             <div>
               <h2 className="text-sm font-semibold text-slate-900">บันทึกการตรวจรับเข้าวัตถุดิบ (RM Receiving)</h2>
@@ -438,7 +468,7 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
                 </>
               ) : (
                 <>
-                  <span className="text-xs">➕</span>
+                  <Plus className="w-3.5 h-3.5 text-slate-500" />
                   <span>เปิดฟอร์มบันทึกรับเข้า</span>
                 </>
               )}
@@ -467,7 +497,7 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
                     {/* 1. Supplier */}
                     <div className="relative">
                       <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                        <span className="text-xs">🏬</span>
+                        <Factory className="w-3.5 h-3.5" />
                         1. Supplier <span className="text-rose-500">*</span>
                       </label>
                       <AutocompleteSelect
@@ -486,7 +516,7 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
                     {/* 3. Bill No */}
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                        <span className="text-xs">📄</span>
+                        <FileText className="w-3.5 h-3.5" />
                         2. เลขที่บิล (Bill No) <span className="text-rose-500">*</span>
                       </label>
                       <input
@@ -502,7 +532,7 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
                     {/* 4. Receive Date */}
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                        <span className="text-xs">📅</span>
+                        <Calendar className="w-3.5 h-3.5" />
                         3. วันที่รับเข้า <span className="text-rose-500">*</span>
                       </label>
                       <input
@@ -529,7 +559,7 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
                     {/* RM (Filtered) */}
                     <div className="relative flex-1 min-w-[240px]">
                       <label className="block text-[13px] font-medium text-slate-700 mb-1.5 flex items-center gap-1.5">
-                        <span className="text-sm">🥬</span>
+                        <Leaf className="w-4 h-4 text-emerald-600" />
                         วัตถุดิบ (RM) <span className="text-rose-500">*</span>
                       </label>
                       <AutocompleteSelect
@@ -648,7 +678,9 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
                          {selectedRM.category === 'Type 3' ? (
                             <div className="p-3.5 rounded-xl bg-emerald-50/80 border border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-2xs">
                               <div className="flex items-center gap-2.5">
-                                <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shrink-0">✓</div>
+                                <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                                  <Check className="w-5 h-5 stroke-[3]" />
+                                </div>
                                 <div>
                                   <div className="flex items-center gap-2">
                                     <span className="text-sm font-bold text-emerald-900">PASS (ผ่านประเมิน)</span>
@@ -661,7 +693,9 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
                           ) : evaluationResult.isPass ? (
                             <div className="p-3.5 rounded-xl bg-emerald-50 border-2 border-emerald-400/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-2xs">
                               <div className="flex items-center gap-2.5">
-                                <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-xs">✓</div>
+                                <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                                  <Check className="w-5 h-5 stroke-[3]" />
+                                </div>
                                 <div>
                                   <div className="flex items-center gap-2">
                                     <span className="text-sm font-bold text-emerald-950">PASS — ผ่านเกณฑ์สุ่มตรวจ</span>
@@ -677,7 +711,9 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
                           ) : (
                             <div className="p-3.5 rounded-xl bg-rose-50 border-2 border-rose-400 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-2xs">
                               <div className="flex items-center gap-2.5">
-                                <div className="w-8 h-8 rounded-lg bg-rose-600 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-xs animate-pulse">✕</div>
+                                <div className="w-8 h-8 rounded-lg bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-xs animate-pulse">
+                                  <X className="w-5 h-5 stroke-[3]" />
+                                </div>
                                 <div>
                                   <div className="flex items-center gap-2">
                                     <span className="text-sm font-bold text-rose-950">FAIL — ไม่ผ่านเกณฑ์สุ่มตรวจ!</span>
@@ -958,7 +994,28 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
                       )}
                     </td>
                     <td className="py-3 px-4 whitespace-nowrap text-center">
-                      <div className="flex items-center justify-center gap-2">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenAttachments(rec)}
+                          className={`relative inline-flex items-center justify-center w-8 h-8 rounded-lg transition-all cursor-pointer ${
+                            rec.attachments && rec.attachments.length > 0
+                              ? 'bg-sky-50 text-sky-700 hover:bg-sky-100 hover:text-sky-800 border border-sky-200 shadow-2xs'
+                              : 'text-slate-400 hover:text-sky-600 hover:bg-sky-50'
+                          }`}
+                          title={
+                            rec.attachments && rec.attachments.length > 0
+                              ? `จัดการรูปภาพแนบ (${rec.attachments.length} รูป)`
+                              : 'แนบรูปภาพ / เอกสาร'
+                          }
+                        >
+                          <ImageIcon className="w-4 h-4" />
+                          {rec.attachments && rec.attachments.length > 0 && (
+                            <span className="absolute -top-1 -right-1 min-w-[15px] h-[15px] px-0.5 rounded-full bg-sky-600 text-white text-[9px] font-bold flex items-center justify-center border border-white shadow-2xs">
+                              {rec.attachments.length}
+                            </span>
+                          )}
+                        </button>
                         <button
                           type="button"
                           onClick={() => handleOpenPostProd(rec)}
@@ -1358,6 +1415,14 @@ export const RMReceivingModule: React.FC<RMReceivingModuleProps> = ({
           </div>
         </div>
       )}
+
+      {/* Attachment Modal */}
+      <RMReceivingAttachmentModal
+        record={attachmentRecord}
+        isOpen={isAttachmentModalOpen}
+        onClose={handleCloseAttachments}
+        onSaveAttachments={handleSaveAttachments}
+      />
     </div>
   );
 };

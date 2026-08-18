@@ -5,6 +5,8 @@ import {
   ReceivingRecord,
   IssueLogRecord,
   DefectCategoryItem,
+  ReceivingAttachmentItem,
+  normalizeAttachmentItem,
   formatPhoneNumber,
   MOCK_SUPPLIERS,
   MOCK_RM_ITEMS,
@@ -75,7 +77,22 @@ export class PurchasingGasService {
               rawReceivingGas.forEach((r) => {
                 if (r && r.id && !seenGasIds.has(r.id)) {
                   seenGasIds.add(r.id);
-                  cleanReceivingGas.push(r);
+                  let rawList: (string | ReceivingAttachmentItem)[] = [];
+                  if (Array.isArray(r.attachments)) {
+                    rawList = r.attachments;
+                  } else if (typeof r.attachments === 'string' && r.attachments.trim() !== '') {
+                    try {
+                      const parsed = JSON.parse(r.attachments);
+                      if (Array.isArray(parsed)) rawList = parsed;
+                      else if (typeof parsed === 'string' || typeof parsed === 'object') rawList = [parsed];
+                    } catch {
+                      rawList = [];
+                    }
+                  }
+                  cleanReceivingGas.push({
+                    ...r,
+                    attachments: rawList.map(normalizeAttachmentItem),
+                  });
                 }
               });
 
@@ -151,7 +168,22 @@ export class PurchasingGasService {
         rawReceiving.forEach((r) => {
           if (r && r.id && !seenRecIds.has(r.id)) {
             seenRecIds.add(r.id);
-            cleanReceiving.push(r);
+            let rawList: (string | ReceivingAttachmentItem)[] = [];
+            if (Array.isArray(r.attachments)) {
+              rawList = r.attachments;
+            } else if (typeof r.attachments === 'string' && r.attachments.trim() !== '') {
+              try {
+                const parsedAttachment = JSON.parse(r.attachments);
+                if (Array.isArray(parsedAttachment)) rawList = parsedAttachment;
+                else if (typeof parsedAttachment === 'string' || typeof parsedAttachment === 'object') rawList = [parsedAttachment];
+              } catch {
+                rawList = [];
+              }
+            }
+            cleanReceiving.push({
+              ...r,
+              attachments: rawList.map(normalizeAttachmentItem),
+            });
           }
         });
 
@@ -248,6 +280,45 @@ export class PurchasingGasService {
         .withSuccessHandler(() => console.log('RMItem deleted from GAS'))
         .withFailureHandler((err: unknown) => console.error('deleteRMRecord failed:', err))
         .deleteRMRecord(id, clientMeta);
+    }
+  }
+
+  static async mergeRMItems(
+    targetRM: RMItem,
+    mergedRmIds: string[],
+    updatedReceivingRecords: ReceivingRecord[],
+    updatedIssueLogs: IssueLogRecord[]
+  ): Promise<void> {
+    const current = this.loadFromLocalStorage();
+    
+    const updatedRmItems = current.rmItems
+      .filter((r) => !mergedRmIds.includes(r.id) || r.id === targetRM.id)
+      .map((r) => (r.id === targetRM.id ? targetRM : r));
+
+    this.saveToLocalStorage({
+      rmItems: updatedRmItems,
+      receivingRecords: updatedReceivingRecords,
+      issueLogs: updatedIssueLogs,
+    });
+
+    await this.saveRMItem(targetRM);
+
+    for (const mergedId of mergedRmIds) {
+      if (mergedId !== targetRM.id) {
+        await this.deleteRMItem(mergedId);
+      }
+    }
+
+    for (const rec of updatedReceivingRecords) {
+      if (mergedRmIds.includes(rec.rmId)) {
+        await this.saveReceivingRecord(rec);
+      }
+    }
+
+    for (const issue of updatedIssueLogs) {
+      if (mergedRmIds.includes(issue.rmId)) {
+        await this.saveIssueLogRecord(issue);
+      }
     }
   }
 
@@ -397,6 +468,48 @@ export class PurchasingGasService {
         .withSuccessHandler(() => console.log('Defect category deleted from GAS'))
         .withFailureHandler((err: unknown) => console.error('deleteDefectCategory failed:', err))
         .deleteDefectCategory(id, clientMeta);
+    }
+  }
+
+  // --- Attachment / Google Drive Methods ---
+
+  static async uploadAttachment(
+    recordId: string,
+    billNo: string,
+    base64Data: string,
+    fileName?: string
+  ): Promise<ReceivingAttachmentItem> {
+    if (this.isGoogleAvailable) {
+      return new Promise((resolve) => {
+        google.script.run
+          .withSuccessHandler((res: { status: string; data?: ReceivingAttachmentItem; message?: string }) => {
+            if (res && res.status === 'success' && res.data) {
+              console.log('[PurchasingGasService] ✅ File uploaded to Google Drive:', res.data.name, res.data.driveViewUrl);
+              resolve(res.data);
+            } else {
+              console.warn('[PurchasingGasService] uploadReceivingAttachmentToDrive failed, using local base64:', res?.message);
+              resolve(normalizeAttachmentItem(base64Data));
+            }
+          })
+          .withFailureHandler((err: unknown) => {
+            console.error('[PurchasingGasService] uploadReceivingAttachmentToDrive error:', err);
+            resolve(normalizeAttachmentItem(base64Data));
+          })
+          .uploadReceivingAttachmentToDrive(recordId, billNo, base64Data, 'image/jpeg', fileName);
+      });
+    }
+
+    // Local dev mode fallback
+    return normalizeAttachmentItem(base64Data);
+  }
+
+  static async deleteAttachmentFile(fileId: string): Promise<void> {
+    if (!fileId || fileId.startsWith('att-')) return;
+    if (this.isGoogleAvailable) {
+      google.script.run
+        .withSuccessHandler(() => console.log('[PurchasingGasService] Deleted file from Google Drive:', fileId))
+        .withFailureHandler((err: unknown) => console.error('deleteReceivingAttachmentFromDrive error:', err))
+        .deleteReceivingAttachmentFromDrive(fileId);
     }
   }
 }

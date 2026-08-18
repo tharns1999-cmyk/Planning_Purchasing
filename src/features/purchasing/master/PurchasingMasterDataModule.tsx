@@ -15,6 +15,12 @@ import {
   MapPin,
   User,
   Tag,
+  Package,
+  Combine,
+  ArrowRight,
+  Sparkles,
+  AlertTriangle,
+  Save,
 } from 'lucide-react';
 import { TablePagination } from '@/components/ui/TablePagination';
 import { AutocompleteSelect, SelectOption } from '@/components/ui/AutocompleteSelect';
@@ -24,6 +30,8 @@ import {
   RMItem,
   DefectRule,
   DefectCategoryItem,
+  ReceivingRecord,
+  IssueLogRecord,
   formatPhoneNumber,
 } from '@/services/DefectMatrixService';
 
@@ -37,6 +45,10 @@ interface PurchasingMasterDataModuleProps {
   onAddRMItem: (rm: RMItem) => void;
   onUpdateRMItem: (rm: RMItem) => void;
   onDeleteRMItem: (id: string) => void;
+
+  receivingRecords?: ReceivingRecord[];
+  issueLogs?: IssueLogRecord[];
+  onMergeRMItems?: (targetRM: RMItem, mergedRmIds: string[]) => void;
 
   defectMatrix: Record<string, DefectRule[]>;
   onUpdateDefectMatrix: (matrix: Record<string, DefectRule[]>) => void;
@@ -55,6 +67,9 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
   onAddRMItem,
   onUpdateRMItem,
   onDeleteRMItem,
+  receivingRecords = [],
+  issueLogs = [],
+  onMergeRMItems,
   defectMatrix = {},
   onUpdateDefectMatrix,
   defectCategories = [],
@@ -319,8 +334,8 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
       rm.supplierIds && rm.supplierIds.length > 0
         ? rm.supplierIds
         : rm.supplierId
-        ? [rm.supplierId]
-        : [];
+          ? [rm.supplierId]
+          : [];
     setSelectedLinkedSupplierIds(linkedIds);
     setIsRmModalOpen(true);
   };
@@ -383,6 +398,107 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
       alert(`Error saving RM Item: ${e.message}`);
       console.error(e);
     }
+  };
+
+  // -----------------------------------------------------------------
+  // 2.1 RM MERGE / DEDUPLICATION TOOL STATE & LOGIC
+  // -----------------------------------------------------------------
+  const [isMergeModalOpen, setIsMergeModalOpen] = useState<boolean>(false);
+  const [selectedMergeRmIds, setSelectedMergeRmIds] = useState<string[]>([]);
+  const [targetRmId, setTargetRmId] = useState<string>('');
+
+  // Auto detect groups of RMs with matching names
+  const duplicateRmGroups = useMemo(() => {
+    const nameMap: Record<string, RMItem[]> = {};
+    (rmItems || []).forEach((rm) => {
+      const cleanName = (rm.name || '').trim().toLowerCase();
+      if (!cleanName) return;
+      if (!nameMap[cleanName]) nameMap[cleanName] = [];
+      nameMap[cleanName]!.push(rm);
+    });
+
+    return Object.entries(nameMap)
+      .filter(([, group]) => group.length > 1)
+      .map(([nameKey, group]) => ({
+        nameKey,
+        rmName: group[0]?.name || nameKey,
+        items: group,
+      }));
+  }, [rmItems]);
+
+  const handleOpenMergeModal = (presetItems?: RMItem[]) => {
+    if (presetItems && presetItems.length > 0) {
+      const ids = presetItems.map((i) => i.id);
+      setSelectedMergeRmIds(ids);
+      setTargetRmId(presetItems[0]?.id || '');
+    } else {
+      setSelectedMergeRmIds([]);
+      setTargetRmId('');
+    }
+    setIsMergeModalOpen(true);
+  };
+
+  const handleToggleMergeRmId = (id: string) => {
+    setSelectedMergeRmIds((prev) => {
+      const next = prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id];
+      if (next.length > 0 && (!targetRmId || !next.includes(targetRmId))) {
+        setTargetRmId(next[0] || '');
+      }
+      return next;
+    });
+  };
+
+  const handleExecuteMerge = () => {
+    if (selectedMergeRmIds.length < 2) {
+      alert('กรุณาเลือกวัตถุดิบอย่างน้อย 2 รายการเพื่อทำการรวมข้อมูล');
+      return;
+    }
+    if (!targetRmId || !selectedMergeRmIds.includes(targetRmId)) {
+      alert('กรุณาเลือกวัตถุดิบรายการหลัก (Master Target RM) ที่ต้องการคงไว้');
+      return;
+    }
+
+    const targetItem = rmItems.find((r) => r.id === targetRmId);
+    if (!targetItem) {
+      alert('ไม่พบข้อมูลวัตถุดิบรายการหลัก');
+      return;
+    }
+
+    // Combine all supplierIds from selected items
+    const allSupplierIds = new Set<string>();
+    selectedMergeRmIds.forEach((id) => {
+      const item = rmItems.find((r) => r.id === id);
+      if (!item) return;
+      if (item.supplierIds && item.supplierIds.length > 0) {
+        item.supplierIds.forEach((sId) => allSupplierIds.add(sId));
+      }
+      if (item.supplierId) {
+        allSupplierIds.add(item.supplierId);
+      }
+    });
+
+    const combinedSupplierIds = Array.from(allSupplierIds);
+    const primarySup = suppliers.find((s) => combinedSupplierIds.includes(s.id)) || suppliers[0];
+
+    const updatedTargetRM: RMItem = {
+      ...targetItem,
+      supplierId: primarySup ? primarySup.id : targetItem.supplierId,
+      supplierName: primarySup ? primarySup.name : targetItem.supplierName,
+      supplierIds: combinedSupplierIds,
+    };
+
+    if (onMergeRMItems) {
+      onMergeRMItems(updatedTargetRM, selectedMergeRmIds);
+    } else {
+      // Fallback
+      onUpdateRMItem(updatedTargetRM);
+      selectedMergeRmIds.forEach((id) => {
+        if (id !== targetRmId) onDeleteRMItem(id);
+      });
+    }
+
+    setIsMergeModalOpen(false);
+    alert(`รวมวัตถุดิบเป็น "${updatedTargetRM.name}" (${updatedTargetRM.code}) เรียบร้อยแล้ว!`);
   };
 
   // -----------------------------------------------------------------
@@ -547,11 +663,10 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
           <button
             type="button"
             onClick={() => setActiveSubTab('suppliers')}
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg transition-all text-xs font-medium whitespace-nowrap cursor-pointer ${
-              activeSubTab === 'suppliers'
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg transition-all text-xs font-medium whitespace-nowrap cursor-pointer ${activeSubTab === 'suppliers'
                 ? 'bg-white text-emerald-800 shadow-2xs font-semibold'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
-            }`}
+              }`}
           >
             <span className="text-sm">🏬</span>
             <span>ข้อมูล Supplier</span>
@@ -563,11 +678,10 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
           <button
             type="button"
             onClick={() => setActiveSubTab('rms')}
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg transition-all text-xs font-medium whitespace-nowrap cursor-pointer ${
-              activeSubTab === 'rms'
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg transition-all text-xs font-medium whitespace-nowrap cursor-pointer ${activeSubTab === 'rms'
                 ? 'bg-white text-sky-800 shadow-2xs font-semibold'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
-            }`}
+              }`}
           >
             <span className="text-sm">🥬</span>
             <span>ทะเบียนวัตถุดิบ & ผูก Supplier</span>
@@ -579,11 +693,10 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
           <button
             type="button"
             onClick={() => setActiveSubTab('matrix')}
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg transition-all text-xs font-medium whitespace-nowrap cursor-pointer ${
-              activeSubTab === 'matrix'
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg transition-all text-xs font-medium whitespace-nowrap cursor-pointer ${activeSubTab === 'matrix'
                 ? 'bg-white text-purple-800 shadow-2xs font-semibold'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
-            }`}
+              }`}
           >
             <span className="text-sm">📐</span>
             <span>ตารางเกณฑ์ QC Matrix</span>
@@ -592,11 +705,10 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
           <button
             type="button"
             onClick={() => setActiveSubTab('defectCats')}
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg transition-all text-xs font-medium whitespace-nowrap cursor-pointer ${
-              activeSubTab === 'defectCats'
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg transition-all text-xs font-medium whitespace-nowrap cursor-pointer ${activeSubTab === 'defectCats'
                 ? 'bg-white text-rose-800 shadow-2xs font-semibold'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
-            }`}
+              }`}
           >
             <span className="text-sm">🏷️</span>
             <span>หมวดหมู่ปัญหา QC</span>
@@ -619,8 +731,8 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
                   activeSubTab === 'suppliers'
                     ? 'ค้นหาชื่อ, รหัส, เบอร์โทร...'
                     : activeSubTab === 'rms'
-                    ? 'ค้นชื่อ RM, รหัส, หมวดหมู่...'
-                    : 'ค้นหมวดหมู่ปัญหา...'
+                      ? 'ค้นชื่อ RM, รหัส, หมวดหมู่...'
+                      : 'ค้นหมวดหมู่ปัญหา...'
                 }
                 className="w-full h-9.5 pl-9 pr-8 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 transition-all placeholder:text-slate-400"
               />
@@ -642,20 +754,37 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
               onClick={handleOpenAddSupplier}
               className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-medium text-sm rounded-xl shadow-xs hover:shadow-sm transition-all cursor-pointer whitespace-nowrap"
             >
-              <span className="text-xs">➕</span>
+              <Plus className="w-4 h-4" />
               <span>เพิ่ม Supplier ใหม่</span>
             </button>
           )}
 
           {activeSubTab === 'rms' && (
-            <button
-              type="button"
-              onClick={handleOpenAddRm}
-              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-sky-600 hover:bg-sky-700 active:scale-95 text-white font-medium text-sm rounded-xl shadow-xs hover:shadow-sm transition-all cursor-pointer whitespace-nowrap"
-            >
-              <span className="text-xs">➕</span>
-              <span>เพิ่มวัตถุดิบ (RM) ใหม่</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleOpenMergeModal()}
+                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 font-medium text-sm rounded-xl shadow-2xs transition-all cursor-pointer whitespace-nowrap"
+                title="รวมรายการวัตถุดิบที่มีชื่อซ้ำกันให้เป็นรายการเดียว"
+              >
+                <Combine className="w-4 h-4 text-amber-700" />
+                <span>รวมวัตถุดิบซ้ำ (Merge RMs)</span>
+                {duplicateRmGroups.length > 0 && (
+                  <span className="px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 text-xs font-bold font-mono animate-pulse">
+                    {duplicateRmGroups.length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleOpenAddRm}
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-sky-600 hover:bg-sky-700 active:scale-95 text-white font-medium text-sm rounded-xl shadow-xs hover:shadow-sm transition-all cursor-pointer whitespace-nowrap"
+              >
+                <Plus className="w-4 h-4" />
+                <span>เพิ่มวัตถุดิบ (RM) ใหม่</span>
+              </button>
+            </div>
           )}
 
           {activeSubTab === 'defectCats' && (
@@ -664,7 +793,7 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
               onClick={handleOpenAddCat}
               className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-medium text-sm rounded-xl shadow-xs hover:shadow-sm transition-all cursor-pointer whitespace-nowrap"
             >
-              <span className="text-xs">➕</span>
+              <Plus className="w-4 h-4" />
               <span>เพิ่มหมวดหมู่ปัญหา</span>
             </button>
           )}
@@ -888,8 +1017,8 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
                       rm.supplierIds && rm.supplierIds.length > 0
                         ? rm.supplierIds
                         : rm.supplierId
-                        ? [rm.supplierId]
-                        : [];
+                          ? [rm.supplierId]
+                          : [];
 
                     const linkedSups = (suppliers || []).filter((s) => s && s.id && linkedSupIds.includes(s.id));
 
@@ -987,7 +1116,7 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
             {Object.entries(dynamicCategories).map(([catKey, catLabel]) => {
               const isSelected = selectedMatrixCategory === catKey;
               const meta = categoryMeta[catKey] || {
-                icon: '📦',
+                icon: <Package className="w-5 h-5 text-purple-600" />,
                 shortTitle: `${catKey}`,
                 subtext: catLabel,
                 themeColor: 'purple',
@@ -999,11 +1128,10 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
                   key={catKey}
                   type="button"
                   onClick={() => setSelectedMatrixCategory(catKey)}
-                  className={`text-left p-4 rounded-2xl transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between border ${
-                    isSelected
+                  className={`text-left p-4 rounded-2xl transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between border ${isSelected
                       ? 'bg-white border-2 border-purple-600 shadow-md shadow-purple-600/10 ring-4 ring-purple-500/10 text-purple-950'
                       : 'bg-white/80 hover:bg-white border-slate-200/90 shadow-2xs hover:shadow-xs hover:border-slate-300 text-slate-700'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="flex items-center gap-2">
@@ -1030,9 +1158,8 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
 
                   <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
                     <span className="text-slate-500 font-medium">เกณฑ์สุ่มตรวจ</span>
-                    <span className={`px-2 py-0.5 rounded-full font-mono font-medium text-xs ${
-                      isSelected ? 'bg-purple-100 text-purple-800 font-semibold' : 'bg-slate-100 text-slate-700'
-                    }`}>
+                    <span className={`px-2 py-0.5 rounded-full font-mono font-medium text-xs ${isSelected ? 'bg-purple-100 text-purple-800 font-semibold' : 'bg-slate-100 text-slate-700'
+                      }`}>
                       {ruleCount} กฎ
                     </span>
                   </div>
@@ -1241,11 +1368,10 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
                         <button
                           type="button"
                           onClick={() => handleToggleCatActive(cat)}
-                          className={`inline-flex items-center justify-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border shadow-2xs transition-all cursor-pointer select-none whitespace-nowrap shrink-0 active:scale-95 ${
-                            cat.isActive !== false
+                          className={`inline-flex items-center justify-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border shadow-2xs transition-all cursor-pointer select-none whitespace-nowrap shrink-0 active:scale-95 ${cat.isActive !== false
                               ? 'bg-emerald-50 text-emerald-700 border-emerald-200/80 hover:bg-emerald-100 hover:border-emerald-300'
                               : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200 hover:text-slate-700'
-                          }`}
+                            }`}
                           title="คลิกเพื่อสลับสถานะ เปิด/ปิดใช้งาน"
                         >
                           <span className="relative flex h-2 w-2 shrink-0">
@@ -1358,11 +1484,10 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
                   <button
                     type="button"
                     onClick={() => setCatIsActive(true)}
-                    className={`p-3 rounded-xl border-2 transition-all cursor-pointer text-left flex items-center gap-2.5 active:scale-95 ${
-                      catIsActive
+                    className={`p-3 rounded-xl border-2 transition-all cursor-pointer text-left flex items-center gap-2.5 active:scale-95 ${catIsActive
                         ? 'bg-emerald-50/70 border-emerald-500 text-emerald-900 shadow-2xs ring-2 ring-emerald-500/20'
                         : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-slate-300'
-                    }`}
+                      }`}
                   >
                     <div className={`p-1.5 rounded-lg ${catIsActive ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-400'}`}>
                       <CheckCircle2 className="w-4 h-4" />
@@ -1377,11 +1502,10 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
                   <button
                     type="button"
                     onClick={() => setCatIsActive(false)}
-                    className={`p-3 rounded-xl border-2 transition-all cursor-pointer text-left flex items-center gap-2.5 active:scale-95 ${
-                      !catIsActive
+                    className={`p-3 rounded-xl border-2 transition-all cursor-pointer text-left flex items-center gap-2.5 active:scale-95 ${!catIsActive
                         ? 'bg-rose-50/70 border-rose-500 text-rose-900 shadow-2xs ring-2 ring-rose-500/20'
                         : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-slate-300'
-                    }`}
+                      }`}
                   >
                     <div className={`p-1.5 rounded-lg ${!catIsActive ? 'bg-rose-500 text-white' : 'bg-slate-200 text-slate-400'}`}>
                       <XCircle className="w-4 h-4" />
@@ -1557,7 +1681,7 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
             <div className="bg-gradient-to-r from-sky-50/80 via-slate-50 to-sky-50/50 px-6 py-4.5 border-b border-slate-200/80 rounded-t-3xl flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center text-lg shadow-2xs">
-                  📦
+                  <Package className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="text-base font-bold text-slate-900">
@@ -1663,10 +1787,211 @@ export const PurchasingMasterDataModule: React.FC<PurchasingMasterDataModuleProp
                   type="submit"
                   className="px-5 py-2.5 bg-sky-600 hover:bg-sky-700 text-white font-medium text-sm rounded-xl shadow-sm transition-all cursor-pointer flex items-center gap-2"
                 >
-                  💾 บันทึกวัตถุดิบ & ผูก Supplier
+                  <Save className="w-4 h-4" />
+                  <span>บันทึกวัตถุดิบ & ผูก Supplier</span>
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* MODAL: MERGE DUPLICATE RMS TOOL */}
+      {/* ------------------------------------------------------------- */}
+      {isMergeModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200/80 w-full max-w-2xl overflow-hidden transform transition-all relative my-auto">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-amber-50 via-slate-50 to-amber-50 px-6 py-4.5 border-b border-amber-200/60 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shadow-2xs">
+                  <Combine className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                    <span>เครื่องมือรวมวัตถุดิบซ้ำ (Merge Duplicate RMs)</span>
+                    <Sparkles className="w-4 h-4 text-amber-600" />
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    รวมรายการวัตถุดิบที่ซ้ำกันให้เหลือรายการเดียว พร้อมโอนย้าย Supplier และประวัติบิลย้อนหลังทั้งหมด
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsMergeModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-slate-200/60 hover:bg-slate-200 text-slate-500 hover:text-slate-800 transition-all flex items-center justify-center cursor-pointer active:scale-95"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto custom-scrollbar">
+              {/* Auto Detected Duplicate Groups Suggestion Box */}
+              {duplicateRmGroups.length > 0 && (
+                <div className="bg-amber-50/80 border border-amber-200 rounded-2xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-amber-900 flex items-center gap-1.5 uppercase tracking-wider">
+                      <Sparkles className="w-4 h-4 text-amber-600" />
+                      ตรวจพบวัตถุดิบที่มีชื่อซ้ำกัน {duplicateRmGroups.length} กลุ่ม
+                    </span>
+                    <span className="text-[11px] text-amber-700">คลิกที่กลุ่มเพื่อเริ่มรวมข้อมูล</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {duplicateRmGroups.map((g) => (
+                      <button
+                        key={g.nameKey}
+                        type="button"
+                        onClick={() => handleOpenMergeModal(g.items)}
+                        className="px-3 py-1.5 bg-white hover:bg-amber-100 text-amber-900 text-xs font-medium rounded-xl border border-amber-300 shadow-2xs transition-all flex items-center gap-2 cursor-pointer"
+                      >
+                        <span className="font-bold">{g.rmName}</span>
+                        <span className="px-1.5 py-0.2 bg-amber-200 text-amber-900 rounded-full text-[10px] font-mono font-bold">
+                          {g.items.length} รายการ
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Step 1: Select RMs to Merge */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                  1. เลือกรายการวัตถุดิบที่ต้องการนำมารวมกัน (อย่างน้อย 2 รายการ)
+                </label>
+                <div className="border border-slate-200 rounded-2xl divide-y divide-slate-100 max-h-48 overflow-y-auto custom-scrollbar bg-slate-50/50">
+                  {rmItems.map((rm) => {
+                    const isChecked = selectedMergeRmIds.includes(rm.id);
+                    const isTarget = targetRmId === rm.id;
+                    const linkedSupIds = rm.supplierIds && rm.supplierIds.length > 0 ? rm.supplierIds : rm.supplierId ? [rm.supplierId] : [];
+                    const linkedSups = (suppliers || []).filter((s) => linkedSupIds.includes(s.id));
+
+                    return (
+                      <div
+                        key={rm.id}
+                        onClick={() => handleToggleMergeRmId(rm.id)}
+                        className={`p-3 flex items-center justify-between transition-colors cursor-pointer ${
+                          isChecked ? 'bg-amber-50/60' : 'hover:bg-white'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {}}
+                            className="w-4 h-4 text-amber-600 rounded border-slate-300 focus:ring-amber-500 cursor-pointer"
+                          />
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-xs font-semibold text-slate-700 bg-white px-2 py-0.5 rounded border border-slate-200">
+                                {rm.code}
+                              </span>
+                              <span className="text-sm font-semibold text-slate-900">{rm.name}</span>
+                              <span className="text-xs text-slate-500">({rm.category})</span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-1 mt-1">
+                              {linkedSups.length === 0 ? (
+                                <span className="text-[11px] text-slate-400 font-italic">ไม่มี Supplier</span>
+                              ) : (
+                                linkedSups.map((s) => (
+                                  <span key={s.id} className="text-[11px] text-slate-600 bg-white px-2 py-0.5 rounded border border-slate-200">
+                                    {s.name}
+                                  </span>
+                                ))
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {isChecked && (
+                          <div className="flex items-center gap-2">
+                            {isTarget ? (
+                              <span className="px-2.5 py-1 rounded-full bg-emerald-600 text-white text-xs font-bold shadow-2xs">
+                                ★ Master Target
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setTargetRmId(rm.id);
+                                }}
+                                className="px-2.5 py-1 rounded-full bg-slate-200 hover:bg-emerald-100 hover:text-emerald-900 text-slate-700 text-xs font-medium transition-all cursor-pointer"
+                              >
+                                เลือกเป็นรายการหลัก
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Step 2: Target Master RM Selection & Preview */}
+              {selectedMergeRmIds.length >= 2 && (
+                <div className="bg-slate-900 text-white rounded-2xl p-4.5 space-y-3 shadow-lg">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4" />
+                      สรุปผลการรวมข้อมูล (Merge Preview)
+                    </span>
+                    <span className="text-xs text-slate-400">
+                      รายการที่เลือก: {selectedMergeRmIds.length} รายการ
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
+                      <span className="text-slate-400 block mb-1">รายการหลักที่คงไว้ (Master RM)</span>
+                      <div className="font-semibold text-emerald-300 text-sm">
+                        {rmItems.find((r) => r.id === targetRmId)?.name} ({rmItems.find((r) => r.id === targetRmId)?.code})
+                      </div>
+                    </div>
+                    <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700">
+                      <span className="text-slate-400 block mb-1">รายการที่จะถูกลบออก</span>
+                      <div className="font-semibold text-rose-300">
+                        {selectedMergeRmIds
+                          .filter((id) => id !== targetRmId)
+                          .map((id) => rmItems.find((r) => r.id === id)?.code)
+                          .join(', ')}
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-slate-300 font-light flex items-center gap-1.5 pt-1">
+                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span>
+                      Supplier ทั้งหมดจากทุกรายการที่เลือก จะถูกนำมารวมผูกกับรายการหลัก และบิลรับเข้า/ปัญหา QC ย้อนหลังจะถูกปรับให้อ้างอิงรายการหลักโดยอัตโนมัติ
+                    </span>
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-200/80 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsMergeModalOpen(false)}
+                className="px-4 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium text-sm rounded-xl transition-all cursor-pointer"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                disabled={selectedMergeRmIds.length < 2 || !targetRmId}
+                onClick={handleExecuteMerge}
+                className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-2"
+              >
+                <Combine className="w-4 h-4" />
+                <span>ยืนยันการรวมวัตถุดิบ</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

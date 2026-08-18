@@ -1,5 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { X, CheckCircle2, XCircle } from 'lucide-react';
+import { 
+  X, CheckCircle2, XCircle, Search, CircleDollarSign, 
+  Scale, TrendingUp, AlertTriangle, AlertCircle, Medal, 
+  PieChart as PieChartIcon, PackageOpen, Download 
+} from 'lucide-react';
 import { motion } from 'motion/react';
 import {
   ResponsiveContainer,
@@ -459,22 +463,50 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
     })).sort((a, b) => b.totalSpend - a.totalSpend);
   }, [globalFilteredReceivingRecords]);
 
-  // E. Supplier Price Comparison Data (for BarChart)
+  // E. Supplier Price Comparison Data (for BarChart) — Top 8 RMs by total spend
   const supplierPriceComparisonData = useMemo(() => {
-    const rmGroups: Record<string, any> = {};
+    // 1. Group averagePriceSummaryData by rmName, summing totalSpend across suppliers
+    const rmSpendMap: Record<string, { rmName: string; totalSpend: number; supplierCount: number }> = {};
     const suppliersSet = new Set<string>();
 
     averagePriceSummaryData.forEach(item => {
-      if (!rmGroups[item.rmName]) {
-        rmGroups[item.rmName] = { rmName: item.rmName };
+      if (!rmSpendMap[item.rmName]) {
+        rmSpendMap[item.rmName] = { rmName: item.rmName, totalSpend: 0, supplierCount: 0 };
       }
-      rmGroups[item.rmName][item.supplierName] = Number(item.avgPrice.toFixed(2));
+      rmSpendMap[item.rmName]!.totalSpend += item.totalSpend;
+      rmSpendMap[item.rmName]!.supplierCount += 1;
       suppliersSet.add(item.supplierName);
     });
 
+    // 2. Sort by total spend descending, take top 8
+    const totalRmCount = Object.keys(rmSpendMap).length;
+    const top8RmNames = Object.values(rmSpendMap)
+      .sort((a, b) => b.totalSpend - a.totalSpend)
+      .slice(0, 8)
+      .map(r => r.rmName);
+
+    // 3. Build chart data only for top 8 RMs
+    const rmGroups: Record<string, Record<string, unknown>> = {};
+    averagePriceSummaryData.forEach(item => {
+      if (!top8RmNames.includes(item.rmName)) return;
+      if (!rmGroups[item.rmName]) {
+        rmGroups[item.rmName] = { rmName: item.rmName };
+      }
+      rmGroups[item.rmName]![item.supplierName] = Number(item.avgPrice.toFixed(2));
+    });
+
+    // 4. Only include suppliers that appear in the top 8 set
+    const activeSuppliers = new Set<string>();
+    Object.values(rmGroups).forEach(group => {
+      Object.keys(group).forEach(key => {
+        if (key !== 'rmName') activeSuppliers.add(key);
+      });
+    });
+
     return {
-      data: Object.values(rmGroups).sort((a, b) => a.rmName.localeCompare(b.rmName)),
-      suppliers: Array.from(suppliersSet)
+      data: Object.values(rmGroups).sort((a, b) => String(a.rmName).localeCompare(String(b.rmName))),
+      suppliers: Array.from(activeSuppliers),
+      totalRmCount,
     };
   }, [averagePriceSummaryData]);
 
@@ -552,7 +584,7 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
         {/* Header: Title & Presets */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-[13px] font-semibold text-slate-800">
-            <span className="text-sm">🔍</span>
+            <Search className="w-4 h-4 text-slate-500" />
             <span>ค้นหาและตัวกรองข้อมูล (Data Filters)</span>
           </div>
 
@@ -727,7 +759,7 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
             </p>
           </div>
           <div className="p-3 rounded-xl bg-sky-50 text-sky-600 border border-sky-100/50">
-            <span className="text-xl">💰</span>
+            <CircleDollarSign className="w-6 h-6" />
           </div>
         </motion.div>
 
@@ -746,7 +778,7 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
             </p>
           </div>
           <div className="p-3 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100/50">
-            <span className="text-xl">⚖️</span>
+            <Scale className="w-6 h-6" />
           </div>
         </motion.div>
 
@@ -775,7 +807,7 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
                 : 'bg-rose-50 text-rose-600 border-rose-100/50'
             }`}
           >
-            <span className="text-xl">📈</span>
+            <TrendingUp className="w-6 h-6" />
           </div>
         </motion.div>
 
@@ -794,7 +826,7 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
             </p>
           </div>
           <div className="p-3 rounded-xl bg-rose-50 text-rose-600 border border-rose-100/50">
-            <span className="text-xl">🚨</span>
+            <AlertTriangle className="w-6 h-6" />
           </div>
         </motion.div>
 
@@ -812,7 +844,7 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
             </p>
           </div>
           <div className="p-3 rounded-xl bg-amber-50 text-amber-600 border border-amber-100/50">
-            <span className="text-xl">⚠️</span>
+            <AlertCircle className="w-6 h-6" />
           </div>
         </motion.div>
       </motion.div>
@@ -825,7 +857,7 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
             <div>
               <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                <span className="text-base">📈</span>
+                <TrendingUp className="w-5 h-5 text-slate-500" />
                 1. แนวโน้มเปอร์เซ็นต์การตรวจผ่านคุณภาพ (Quality Pass Rate Trend)
               </h3>
               <p className="text-[13px] text-slate-500 mt-1">
@@ -869,7 +901,7 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
 
           {trendData.length === 0 ? (
             <div className="h-64 w-full flex flex-col items-center justify-center bg-slate-50/50 rounded-xl border border-dashed border-slate-200 p-6 text-center mt-auto mb-auto">
-              <span className="text-3xl mb-2 opacity-40">📈</span>
+              <TrendingUp className="w-8 h-8 mb-2 text-slate-400" />
               <p className="text-sm font-normal text-slate-600">ยังไม่มีข้อมูลแนวโน้มคุณภาพ</p>
               <p className="text-sm text-slate-400 mt-0.5 max-w-xs">
                 ระบบจะพล็อตกราฟแนวโน้มอัตโนมัติเมื่อเริ่มบันทึกประวัติการตรวจรับเข้าวัตถุดิบ
@@ -911,7 +943,7 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                <span className="text-base">🥇</span>
+                <Medal className="w-5 h-5 text-slate-500" />
                 2. จัดอันดับผู้ส่งมอบที่มีปัญหาคุณภาพสูงสุด (Supplier Defect Ranking)
               </h3>
               <p className="text-[13px] text-slate-500 mt-1">
@@ -922,7 +954,7 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
 
           {supplierRankingData.length === 0 ? (
             <div className="h-64 w-full flex flex-col items-center justify-center bg-slate-50/50 rounded-xl border border-dashed border-slate-200 p-6 text-center">
-              <span className="text-3xl mb-2 opacity-40">🥇</span>
+              <Medal className="w-8 h-8 mb-2 text-slate-400" />
               <p className="text-sm font-normal text-slate-600">ยังไม่มีข้อมูลจัดอันดับ Supplier ไม่ผ่านเกณฑ์</p>
               <p className="text-sm text-slate-400 mt-0.5 max-w-xs">
                 ระบบจะจัดอันดับผู้ส่งมอบที่มีบิลตรวจไม่ผ่าน (FAIL) โดยอัตโนมัติเมื่อพบของเสีย
@@ -955,7 +987,7 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                <span className="text-base">📊</span>
+                <PieChartIcon className="w-5 h-5 text-slate-500" />
                 3. สัดส่วนน้ำหนักของเสียตามหมวดหมู่ (Defect Vol by RM Category)
               </h3>
               <p className="text-[13px] text-slate-500 mt-1">
@@ -966,7 +998,7 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
 
           {categoryBreakdownData.length === 0 ? (
             <div className="h-64 w-full flex flex-col items-center justify-center bg-slate-50/50 rounded-xl border border-dashed border-slate-200 p-6 text-center">
-              <span className="text-3xl mb-2 opacity-40">📊</span>
+              <PieChartIcon className="w-8 h-8 mb-2 text-slate-400" />
               <p className="text-sm font-normal text-slate-600">ยังไม่มีสัดส่วนน้ำหนักของเสีย</p>
               <p className="text-sm text-slate-400 mt-0.5 max-w-xs">
                 ไม่พบน้ำหนักของเสียแยกตามหมวดหมู่ในช่วงเวลาที่เลือก
@@ -1007,7 +1039,7 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                <span className="text-base">📦</span>
+                <PackageOpen className="w-5 h-5 text-slate-500" />
                 4. วัตถุดิบที่มีของเสียสูงสุด (Top Defect RM Items)
               </h3>
               <p className="text-[13px] text-slate-500 mt-1">
@@ -1018,7 +1050,7 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
 
           {topDefectRmsData.length === 0 ? (
             <div className="h-64 w-full flex flex-col items-center justify-center bg-slate-50/50 rounded-xl border border-dashed border-slate-200 p-6 text-center">
-              <span className="text-3xl mb-2 opacity-40">📦</span>
+              <PackageOpen className="w-8 h-8 mb-2 text-slate-400" />
               <p className="text-sm font-normal text-slate-600">ยังไม่มีข้อมูลวัตถุดิบที่มีของเสีย</p>
             </div>
           ) : (
@@ -1045,18 +1077,23 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                <span className="text-base">💸</span>
+                <CircleDollarSign className="w-5 h-5 text-slate-500" />
                 5. เปรียบเทียบราคาต่อหน่วยเฉลี่ยตาม Supplier (Supplier Price Comparison)
               </h3>
               <p className="text-[13px] text-slate-500 mt-1">
                 เปรียบเทียบราคาซื้อเฉลี่ยของวัตถุดิบชนิดเดียวกันจากผู้ส่งมอบแต่ละราย (บาท/kg)
               </p>
             </div>
+            {supplierPriceComparisonData.totalRmCount > 0 && (
+              <span className="text-xs font-medium text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 whitespace-nowrap">
+                แสดง Top {Math.min(8, supplierPriceComparisonData.totalRmCount)} / {supplierPriceComparisonData.totalRmCount} วัตถุดิบ
+              </span>
+            )}
           </div>
 
           {supplierPriceComparisonData.data.length === 0 ? (
             <div className="h-64 w-full flex flex-col items-center justify-center bg-slate-50/50 rounded-xl border border-dashed border-slate-200 p-6 text-center">
-              <span className="text-3xl mb-2 opacity-40">💸</span>
+              <CircleDollarSign className="w-8 h-8 mb-2 text-slate-400" />
               <p className="text-sm font-normal text-slate-600">ยังไม่มีข้อมูลเปรียบเทียบราคา</p>
               <p className="text-sm text-slate-400 mt-0.5 max-w-xs">
                 เฉพาะรายการที่มีการระบุราคาต่อหน่วยเท่านั้นที่จะถูกนำมาแสดง
@@ -1154,7 +1191,7 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
           <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
             {/* Search */}
             <div className="relative flex-1 md:w-56">
-              <span className="text-xs absolute left-3 top-2.5 opacity-50">🔍</span>
+              <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
               <input
                 type="text"
                 value={searchQuery}
@@ -1170,7 +1207,7 @@ export const PurchasingAnalyticsDashboard: React.FC<PurchasingAnalyticsDashboard
               onClick={handleExportCSV}
               className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-normal text-sm rounded-xl shadow-xs transition-all cursor-pointer"
             >
-              <span className="text-xs">📥</span>
+              <Download className="w-4 h-4" />
               <span>Export to CSV</span>
             </button>
           </div>

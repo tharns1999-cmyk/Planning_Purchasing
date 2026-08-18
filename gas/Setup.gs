@@ -145,7 +145,8 @@ function setupPurchasingDatabase() {
     'id', 'billNo', 'receiveDate', 'supplierId', 'supplierName',
     'rmId', 'rmName', 'rmCategory', 'receiveQty', 'sampleQty',
     'defectQty', 'defectPercent', 'isPass', 'remark', 'createdAt', 'hasIssueLog',
-    'postProductionDefectQty', 'postProductionRemark', 'postProductionDate', 'unitPrice'
+    'postProductionDefectQty', 'postProductionRemark', 'postProductionDate', 'unitPrice',
+    'attachments'
   ];
   setupPurchasingSheetHeaders(recSheet, recHeaders, '#059669');
 
@@ -209,4 +210,14 @@ function setupPurchasingSheetHeaders(sheet, headers, hexColor) {
     .setHorizontalAlignment('center');
 
   sheet.setFrozenRows(1);
+}
+
+/**
+ * Run this function from Apps Script Editor or Menu to authorize Google Drive!
+ */
+function testDriveAuth() {
+  const folder = getOrCreateReceivingAttachmentsFolder();
+  Logger.log('✅ Google Drive is authorized! Attachments folder ID: ' + folder.getId());
+  SpreadsheetApp.getActiveSpreadsheet().toast('✅ อนุญาตสิทธิ์ Google Drive สำเร็จแล้ว! โฟลเดอร์ RM_Receiving_Attachments พร้อมใช้งาน', 'Purchasing System', 6);
+  return folder.getId();
 }
